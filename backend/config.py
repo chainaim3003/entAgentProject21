@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     # REQUIRED — ACTUS-Mentor REST API (disclosure)
     actus_mentor_url: str = Field(..., description="ACTUS-Mentor REST API base URL")
 
+    # OPTIONAL — X-API-Key header for ACTUS-Mentor.
+    # Set this only if the ACTUS-Mentor server has API_SECRET_KEY enabled.
+    # Leave blank otherwise (ACTUS-Mentor disables auth when API_SECRET_KEY is unset).
+    actus_mentor_api_key: str = Field(default="", description="X-API-Key for ACTUS-Mentor")
+
     # Persistence (defaults to local SQLite)
     checkpoint_db_url: str = Field(default="sqlite:///./checkpoints.db")
     memory_db_url: str = Field(default="sqlite:///./memory.db")

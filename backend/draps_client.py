@@ -1,73 +1,215 @@
 """
-draps_client.py — MCP client for DRAPS run_simulation tool.
+draps_client.py — HTTP client for DRAPS /api/simulate.
 
-This is the deterministic knot connector. Single source of truth for the DRAPS interface.
+DRAPS exposes a plain HTTP REST server (Express, src/server.ts) on the configured URL.
+This file POSTs validated loan + market context to DRAPS and returns the
+{A_total, B_total, C_total, events} shape that the rest of the bow-tie expects.
 
-CURRENT STATUS: NotImplementedError.
-The exact input/output contract of the DRAPS `run_simulation` MCP tool is not yet verified.
+NOTE on the env var name:
+  The variable is called `DRAPS_MCP_URL` in config.py for historical reasons (the
+  original design assumed MCP transport). DRAPS actually speaks plain HTTP. The
+  variable still works — it's the same URL — just misnamed. Cosmetic rename deferred.
 
-To complete:
-  1. Read `SWAPS-interface/Backend/src/mcp-server.ts` from the DRAPS GitHub repo
-     (github.com/24pba027-droid/Swaps-for-Supply-Chain-Finance) to confirm:
-       - exact tool name ("run_simulation" or similar)
-       - exact input schema (likely takes loan + market context + scenarios A/B/C config)
-       - exact output schema (must include A_total, B_total, C_total, events for the right wing)
-  2. Implement the MCP client connection to DRAPS_MCP_URL (from config.settings.draps_mcp_url).
-  3. Implement run_simulation() body to call the MCP tool and shape the output to:
-       {"A_total": float, "B_total": float, "C_total": float, "events": list[dict]}
+CONTRACT (verified by reading SWAPS-interface/Backend/src/routes/simulation.routes.ts):
+  POST {DRAPS_URL}/api/simulate
+  Body: { configData: { config_metadata: {config_id, collection_file}, ...primary_vars } }
+  Returns: a simulation result object (shape parsed defensively below)
 
-Reference: DESIGN/DESIGN1/design-1-detailed-design.md §6 note 1.
+Reference: SWAPS-1LOAN-WHAT-IF-DEMO.json (the Postman collection that defines primary variables).
 """
 
 from __future__ import annotations
 
+import logging
+from datetime import datetime
 from typing import Any
+
+import httpx
 
 from config import settings
 
+logger = logging.getLogger("draps_client")
+
+# The Postman collection file DRAPS loads to seed the simulation. Lives on the
+# DRAPS server's disk (typically in its config folder). Override if your DRAPS
+# deployment uses a different collection.
+_DEFAULT_COLLECTION = "SWAPS-1LOAN-WHAT-IF-DEMO.json"
+
+# Scenario offsets that DEFINE A/B/C in the bow-tie architecture (NOT mocked —
+# these are the structural definition of the scenarios in the design):
+#   A = no hedge       (no swap requested)
+#   B = hedge NOW      (swap offset = 0 months from loan start)
+#   C = hedge LATER    (swap offset = 3 months from loan start)
+_SWAP_NOW_OFFSET_MONTHS = 0
+_SWAP_LATER_OFFSET_MONTHS = 3
+
+
+def _months_to_maturity_date(start_date_iso: str, term_months: int) -> str:
+    """Add term_months to an ISO date string. Returns ISO date string.
+
+    Manual calculation — avoids adding a dateutil dependency.
+    """
+    start = datetime.fromisoformat(start_date_iso)
+    total_months = start.month - 1 + term_months
+    year = start.year + total_months // 12
+    month = total_months % 12 + 1
+    day = start.day
+    # Clamp day for short months
+    if month in (4, 6, 9, 11) and day == 31:
+        day = 30
+    elif month == 2 and day > 28:
+        is_leap = (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0))
+        day = 29 if is_leap else 28
+    return f"{year:04d}-{month:02d}-{day:02d}"
+
+
+def _build_config_data(validated: dict[str, Any]) -> dict[str, Any]:
+    """Translate Hedge Advisor's validated_inputs into DRAPS's configData shape.
+
+    Maps the cross-product of (Hedge Advisor schema) ↔ (DRAPS Postman variables).
+    """
+    loan = validated.get("loan", {})
+    market = validated.get("market", {})
+
+    notional = loan.get("notional_usd")
+    start_date = loan.get("start_date")
+    term_months = loan.get("term_months")
+    maturity_date = _months_to_maturity_date(start_date, term_months)
+
+    corridor = market.get("corridor") or {}
+    exporter = corridor.get("origin")
+    importer = corridor.get("destination")
+    commodity = market.get("gtap_commodity_code")
+    tariff = market.get("tariff_assumption_pct")
+
+    # Hedge Advisor's N2 produces a single tariff assumption. DRAPS expects both
+    # `tariff_current` and `tariff_peak`. We send the same value for both, which
+    # simulates a flat tariff (no escalation scenario). To enable tariff escalation:
+    # extend N2 Market Context to emit `tariff_current` and `tariff_peak` separately.
+    tariff_current = tariff if tariff is not None else 0.0
+    tariff_peak = tariff_current
+
+    return {
+        "config_metadata": {
+            "config_id": f"hedge-advisor-{notional}-{commodity}",
+            "collection_file": _DEFAULT_COLLECTION,
+        },
+        "loan_notional": notional,
+        "loan_start_date": start_date,
+        "loan_maturity_date": maturity_date,
+        "exporter_country": exporter,
+        "importer_country": importer,
+        "commodity_code": commodity,
+        "tariff_current": tariff_current,
+        "tariff_peak": tariff_peak,
+        "swap_now_offset_months": _SWAP_NOW_OFFSET_MONTHS,
+        "swap_later_offset_months": _SWAP_LATER_OFFSET_MONTHS,
+    }
+
+
+def _extract_scenarios(response_json: dict[str, Any]) -> dict[str, Any]:
+    """Defensively pull A_total, B_total, C_total, events out of DRAPS's response.
+
+    DRAPS's response shape isn't fully documented from the source we've read.
+    We try several plausible nesting locations and raise a clear error if none
+    match — intentional, so we fail honestly rather than fabricate totals.
+    """
+    if not isinstance(response_json, dict):
+        raise RuntimeError(
+            f"DRAPS returned non-object JSON: {type(response_json).__name__}"
+        )
+
+    # 1) Flat top-level shape
+    flat = {k: response_json.get(k) for k in ("A_total", "B_total", "C_total")}
+    if all(isinstance(flat[k], (int, float)) for k in flat):
+        events = response_json.get("events") or response_json.get("cashflow_events") or []
+        return {**flat, "events": events}
+
+    # 2) Nested under "scenarios"
+    scenarios = response_json.get("scenarios")
+    if isinstance(scenarios, dict):
+        a = (scenarios.get("A") or {}).get("total")
+        b = (scenarios.get("B") or {}).get("total")
+        c = (scenarios.get("C") or {}).get("total")
+        if all(isinstance(v, (int, float)) for v in (a, b, c)):
+            events = (
+                (scenarios.get("B") or {}).get("events")
+                or (scenarios.get("C") or {}).get("events")
+                or response_json.get("events")
+                or []
+            )
+            return {"A_total": a, "B_total": b, "C_total": c, "events": events}
+
+    # 3) Nested under "result" or "simulationResult"
+    result = response_json.get("result") or response_json.get("simulationResult")
+    if isinstance(result, dict):
+        a = result.get("A_total") or result.get("a_total")
+        b = result.get("B_total") or result.get("b_total")
+        c = result.get("C_total") or result.get("c_total")
+        if all(isinstance(v, (int, float)) for v in (a, b, c)):
+            events = result.get("events") or response_json.get("events") or []
+            return {"A_total": a, "B_total": b, "C_total": c, "events": events}
+
+    # Honest failure — DRAPS returned data but the shape isn't recognized
+    raise RuntimeError(
+        "DRAPS simulation succeeded but the response shape was unexpected. "
+        f"Top-level keys: {sorted(response_json.keys())}. "
+        "Update draps_client._extract_scenarios() with the actual response path. "
+        "Invariant I5: we never fabricate a scenario total."
+    )
+
 
 def run_simulation(validated_inputs: dict[str, Any]) -> dict[str, Any]:
-    """Call DRAPS run_simulation MCP tool.
+    """Call DRAPS /api/simulate.
 
     Args:
-        validated_inputs: schema-clean inputs from N3 Validator. Has shape:
-            {
-              "loan":   {"notional_usd", "spread_bps", "term_months", "start_date", "rate_index"},
-              "market": {"gtap_commodity_code", "corridor", "tariff_assumption_pct", "rate_curve_index"}
-            }
+        validated_inputs: schema-clean inputs from N3 Validator.
 
     Returns:
         {
-          "A_total":   <total cash outflow USD, no-hedge scenario>,
-          "B_total":   <total cash outflow USD, hedge-now scenario>,
-          "C_total":   <total cash outflow USD, hedge-in-3mo scenario>,
-          "events":    <list of ACTUS events for the disclosure agent>,
+          "A_total": float, "B_total": float, "C_total": float,
+          "events": list[dict],
         }
 
     Raises:
-        NotImplementedError: the DRAPS run_simulation tool contract is not yet verified.
+        RuntimeError: if DRAPS is unreachable, returns non-200, or returns
+            an unrecognized response shape. We never fabricate results.
     """
-    # When implementing: connect to settings.draps_mcp_url here.
-    # Use the `mcp` Python client. Sketch:
-    #
-    #   from mcp.client.session import ClientSession
-    #   from mcp.client.streamable_http import streamablehttp_client
-    #
-    #   async with streamablehttp_client(settings.draps_mcp_url) as (read, write, _):
-    #       async with ClientSession(read, write) as session:
-    #           await session.initialize()
-    #           result = await session.call_tool(
-    #               name="run_simulation",            # confirm exact name in mcp-server.ts
-    #               arguments={...validated_inputs}, # confirm exact arg shape in mcp-server.ts
-    #           )
-    #           # Parse result.content into {A_total, B_total, C_total, events}
-    #           return parsed
-    #
-    # Wrap in asyncio.run() or make this function async + propagate up to the graph.
-    raise NotImplementedError(
-        "DRAPS run_simulation contract not yet verified. "
-        "See DESIGN/DESIGN1/design-1-detailed-design.md §6 note 1. "
-        "Required reads before implementation: "
-        "SWAPS-interface/Backend/src/mcp-server.ts (GitHub) for exact tool I/O shape. "
-        f"Target endpoint: {settings.draps_mcp_url}"
+    config_data = _build_config_data(validated_inputs)
+    url = f"{settings.draps_mcp_url.rstrip('/')}/api/simulate"
+
+    logger.info(
+        "draps_client: POST %s (config_id=%s)",
+        url, config_data["config_metadata"]["config_id"],
     )
+
+    try:
+        with httpx.Client(timeout=120.0) as client:
+            resp = client.post(url, json={"configData": config_data})
+    except httpx.RequestError as e:
+        raise RuntimeError(
+            f"DRAPS unreachable at {url}: {e}. "
+            "Is the DRAPS server running? Run `npm run server` in "
+            "SWAPS-interface/Backend (listens on port 4000 by default)."
+        ) from e
+
+    if resp.status_code != 200:
+        # Surface DRAPS's own error message — don't paper over it
+        body = resp.text[:500]
+        raise RuntimeError(
+            f"DRAPS /api/simulate returned HTTP {resp.status_code}: {body}"
+        )
+
+    try:
+        data = resp.json()
+    except Exception as e:
+        raise RuntimeError(
+            f"DRAPS returned non-JSON response: {resp.text[:300]}"
+        ) from e
+
+    if isinstance(data, dict) and data.get("success") is False:
+        raise RuntimeError(
+            f"DRAPS simulation reported failure: {data.get('error', 'unknown')}"
+        )
+
+    return _extract_scenarios(data)

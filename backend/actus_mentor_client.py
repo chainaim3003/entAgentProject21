@@ -1,31 +1,33 @@
 """
 actus_mentor_client.py — HTTP client for ACTUS-Mentor /generate-xbrl-report.
 
-Single source of truth for the ACTUS-Mentor REST interface used by N6 Disclosure.
+ACTUS Mentor's api_server.py exposes /generate-xbrl-report as a DETERMINISTIC
+templating endpoint — it maps ACTUS cash flow events to IFRS / US-GAAP XBRL
+fields via xbrl_output_generator.py. Does NOT call the 9-node RAG pipeline.
+This is the right wing of the bow-tie: structured in, regulator-grade artifact out.
 
-CURRENT STATUS: NotImplementedError.
-The /generate-xbrl-report endpoint is *classified* deterministic-templating in the design,
-but the exact request/response shape has not been verified by reading api_server.py.
-
-To complete:
-  1. Read ACTUS-Mentor's api_server.py to confirm:
-       - exact path (/generate-xbrl-report assumed)
-       - exact request body {actus_events, contract_info, taxonomy}
-       - exact response shape (likely a wrapper around the XBRL document(s))
-  2. Confirm the endpoint is deterministic templating, NOT the 7-agent RAG graph.
-       If it IS the RAG graph, the Disclosure Agent must be reclassified as reasoning
-       and moved to reasoning_agents.py (per DESIGN/DESIGN1/design-1-detailed-design.md §6 note 2).
-  3. Implement the call below.
-
-Reference: DESIGN/DESIGN1/design-1-detailed-design.md §6 note 2.
+CONTRACT (verified by reading ACTUS-MENTOR-MCP/backend/api_server.py):
+  POST {ACTUS_MENTOR_URL}/generate-xbrl-report
+  Headers: X-API-Key (optional — required only if ACTUS Mentor has API_SECRET_KEY set)
+  Body: {
+    "actus_events":  [...],          # events from the DRAPS simulation
+    "contract_info": {...},          # loan + market context
+    "taxonomy":      "ifrs" | "usgaap" | "both",
+  }
+  Returns: dict produced by xbrl_output_generator.generate_xbrl_report
+           (includes a "summary" block, plus per-taxonomy structured documents)
 """
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal
+
+import httpx
 
 from config import settings
 
+logger = logging.getLogger("actus_mentor_client")
 
 Taxonomy = Literal["ifrs", "usgaap", "both"]
 
@@ -39,37 +41,60 @@ def generate_xbrl_report(
     """Call ACTUS-Mentor /generate-xbrl-report.
 
     Args:
-        events:        ACTUS events list from the DRAPS simulation (state.simulation_result.events).
+        events:        ACTUS cash flow events from the DRAPS simulation
+                       (state.simulation_result.events).
         contract_info: original contract details (loan + market).
         taxonomy:      'ifrs' | 'usgaap' | 'both'.
 
     Returns:
-        {
-          "taxonomies": ["ifrs", "usgaap"],
-          "ifrs":   {<XBRL document or its serialization>},
-          "usgaap": {<XBRL document or its serialization>},
-        }
+        The full XBRL report dict produced by xbrl_output_generator. Includes
+        a "summary" block and per-taxonomy structured documents (IFRS, US-GAAP).
 
     Raises:
-        NotImplementedError: the ACTUS-Mentor /generate-xbrl-report endpoint contract
-            is not yet verified.
+        RuntimeError: if ACTUS Mentor is unreachable or returns non-200.
+            We never fabricate a disclosure document.
     """
-    # When implementing:
-    #   import httpx
-    #   url = f"{settings.actus_mentor_url}/generate-xbrl-report"
-    #   payload = {
-    #       "actus_events":  events,
-    #       "contract_info": contract_info,
-    #       "taxonomy":      taxonomy,
-    #   }
-    #   with httpx.Client(timeout=60.0) as client:
-    #       resp = client.post(url, json=payload)
-    #       resp.raise_for_status()
-    #       return resp.json()
-    raise NotImplementedError(
-        "ACTUS-Mentor /generate-xbrl-report contract not yet verified. "
-        "See DESIGN/DESIGN1/design-1-detailed-design.md §6 note 2. "
-        "Required reads before implementation: ACTUS-Mentor api_server.py to confirm "
-        "the endpoint is deterministic templating (not the 7-agent RAG graph). "
-        f"Target endpoint: {settings.actus_mentor_url}/generate-xbrl-report"
+    url = f"{settings.actus_mentor_url.rstrip('/')}/generate-xbrl-report"
+    payload = {
+        "actus_events":  events,
+        "contract_info": contract_info,
+        "taxonomy":      taxonomy,
+    }
+
+    headers: dict[str, str] = {}
+    api_key = getattr(settings, "actus_mentor_api_key", "") or ""
+    if api_key:
+        headers["X-API-Key"] = api_key
+
+    logger.info(
+        "actus_mentor_client: POST %s (taxonomy=%s, events=%d)",
+        url, taxonomy, len(events),
     )
+
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            resp = client.post(url, json=payload, headers=headers)
+    except httpx.RequestError as e:
+        raise RuntimeError(
+            f"ACTUS-Mentor unreachable at {url}: {e}. "
+            "Is the ACTUS-Mentor uvicorn server running on the configured port?"
+        ) from e
+
+    if resp.status_code == 401:
+        raise RuntimeError(
+            "ACTUS-Mentor returned 401 Unauthorized. "
+            "Set ACTUS_MENTOR_API_KEY in .env if ACTUS-Mentor has API_SECRET_KEY enabled."
+        )
+
+    if resp.status_code != 200:
+        body = resp.text[:500]
+        raise RuntimeError(
+            f"ACTUS-Mentor /generate-xbrl-report returned HTTP {resp.status_code}: {body}"
+        )
+
+    try:
+        return resp.json()
+    except Exception as e:
+        raise RuntimeError(
+            f"ACTUS-Mentor returned non-JSON response: {resp.text[:300]}"
+        ) from e

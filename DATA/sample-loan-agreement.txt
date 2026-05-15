@@ -1,0 +1,45 @@
+LOAN AGREEMENT
+
+This Loan Agreement ("Agreement") is entered into on January 15, 2026, between
+APEX TEXTILE IMPORTS INC., a Delaware corporation ("Borrower"), and FIRST
+NATIONAL BANK OF NEW YORK, a national banking association ("Lender").
+
+1. PRINCIPAL AMOUNT
+The Lender hereby agrees to extend a term loan facility to the Borrower in the
+principal amount of One Million United States Dollars (USD 1,000,000) under
+the terms set forth herein.
+
+2. INTEREST RATE
+The Loan shall bear interest at the Floating Rate, defined as the Secured
+Overnight Financing Rate (SOFR) plus a credit spread of 250 basis points
+(2.50%) per annum, calculated and reset on a monthly basis. Interest shall be
+payable in arrears on the last business day of each calendar month.
+
+3. TERM
+The Loan shall have a maturity of twenty-four (24) months from the Origination
+Date (January 15, 2026), with a stated Maturity Date of January 15, 2028.
+
+4. CURRENCY
+All disbursements, principal repayments, accrued interest, and fees shall be
+denominated and payable in United States Dollars (USD).
+
+5. USE OF PROCEEDS
+The Borrower confirms that the Loan proceeds shall be used exclusively for the
+financing of woven textile fabric imports (HS commodity code 5208, GTAP
+classification "tex") sourced from suppliers located in the Republic of India,
+destined for wholesale and retail distribution in the United States.
+
+6. REPAYMENT
+Principal shall be repaid in full on the Maturity Date (bullet repayment).
+Interest shall be paid monthly as set forth in Section 2.
+
+7. GOVERNING LAW
+This Agreement shall be governed by and construed in accordance with the laws
+of the State of New York.
+
+IN WITNESS WHEREOF, the parties have executed this Agreement as of the date
+first written above.
+
+  ___________________________          ___________________________
+  Apex Textile Imports Inc.            First National Bank of New York
+  (Borrower)                           (Lender)
