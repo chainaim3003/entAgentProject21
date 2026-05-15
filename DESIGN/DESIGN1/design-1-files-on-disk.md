@@ -1,30 +1,27 @@
 # Project 2 — ACTUS Hedge Advisor
 ## design-1: Files Created on Disk (Inventory from Long FIN Agents-Team-1)
 
-> **Source:** Extracted from chat "Long FIN Agents-Team-1"
-> (https://claude.ai/chat/a0d16ca6-e71f-4eb7-84b5-5eee99c81124)
+> **Source chat:** "Long FIN Agents-Team-1" (https://claude.ai/chat/a0d16ca6-e71f-4eb7-84b5-5eee99c81124)
 > **Date of inventory:** 2026-05-15
-> **Method:** Direct `list_directory` reads of the target folders, cross-checked against `write_file` calls visible in the source chat snippets.
+> **Method:** Direct `list_directory` reads of the target folders, plus `read_text_file` to confirm which version is the LATEST/authoritative.
 
 ---
 
-## 1. Files verified ON DISK for Project 2 (Long FIN Agents-Team-1)
+## 1. Files verified ON DISK for Project 2
 
 Folder: `C:\SATHYA\CHAINAIM3003\mcp-servers\LEGENT-PROC\`
 
 | File | Purpose | Status |
 |---|---|---|
-| `hedge_advisor_graph_skeleton.py` | LangGraph skeleton — 5 sections (State, Nodes, Conditional Edge, Graph, Run); each node tagged `[REASONING - Gemini]` or `[DETERMINISTIC - no LLM]`; agent-type law enforced by which nodes import the Gemini client; `SqliteSaver` checkpointer; `thread_id`-based resume | ✅ EXISTS on disk |
-| `PROJECT2_ACTUS_HEDGE_ADVISOR.md` | Main Project 2 design doc (problem/solution/impact/architecture) | ✅ EXISTS on disk |
-| `PROJECT2_BOWTIE_REFRAMED.md` | Bow-tie reframing of Project 2 — 8 named agents, agent-type law, multi-agent system version | ✅ EXISTS on disk |
+| `PROJECT2_BOWTIE_REFRAMED.md` | **LATEST AUTHORITATIVE VERSION.** Project 2 reframed around the bow-tie engineering law: 88% demo-to-prod failure rate, US manufacturer with import-dependent supply chain, stochastic/deterministic separation as the architectural law. Full 8-agent roster with agent-type law. Sections 1-6 + Bottom line. | ✅ EXISTS on disk |
+| `PROJECT2_ACTUS_HEDGE_ADVISOR.md` | **EARLIER DRAFT — superseded.** The earlier "cross-border exporters" framing. Useful for the DRAPS evidence and the verified-from-team-record narration, but the problem statement framing is older and was replaced by BOWTIE_REFRAMED. | ✅ EXISTS on disk (but superseded) |
+| `hedge_advisor_graph_skeleton.py` | LangGraph skeleton code — 5 sections (State, Nodes, Conditional Edge, Graph, Run); each node tagged `[REASONING - Gemini]` or `[DETERMINISTIC - no LLM]`; agent-type law enforced by which nodes import the Gemini client; `SqliteSaver` checkpointer; `thread_id`-based resume. Contains 3 explicit `TODO: confirm contract` markers for the unverified connector details. | ✅ EXISTS on disk |
 
-These three files are the **Project 2-specific outputs** that survived from that chat.
-
-### Other files in LEGENT-PROC (context, not from Project 2 directly)
+### Other files in LEGENT-PROC (context, not Project 2 outputs from this chat)
 
 Files present in the same folder that pre-date or were not Project-2-specific outputs of the source chat:
 
-- `20240907_AI and Financial Analysis Risk and Core Banking Final (2).pdf`
+- `20240907_AI and Financial Analysis Risk and Core Banking Final (2).pdf` (Brammertz & Kubli paper)
 - `Agentic Procurement.pptx`
 - `DEMO video - agent negotiation.mp4`
 - `DRAPS_Narration_Script - v1.md`
@@ -35,64 +32,69 @@ Files present in the same folder that pre-date or were not Project-2-specific ou
 
 ---
 
-## 2. File that the source chat *attempted* to write but is NOT currently on disk
+## 2. Which file is authoritative for which content
+
+| Content | Authoritative source on disk |
+|---|---|
+| **Problem statement (latest framing)** | `PROJECT2_BOWTIE_REFRAMED.md` Section 1 — demo-to-prod gap, 88% pilots fail, US manufacturer, stochastic infection |
+| **Solution statement (latest)** | `PROJECT2_BOWTIE_REFRAMED.md` Section 2 — agent roster wing-by-wing |
+| **Impact (latest)** | `PROJECT2_BOWTIE_REFRAMED.md` Section 3 — reusable architectural pattern, enterprise walls cleared by construction, SCF $7-8B, $41,875 DRAPS proof |
+| **Conceptual design (bow-tie diagram)** | `PROJECT2_BOWTIE_REFRAMED.md` Section 4 |
+| **DRAPS evidence (verified from team record)** | `PROJECT2_ACTUS_HEDGE_ADVISOR.md` Section 2 — DRAPS narration script details (kept for the verified DRAPS run details: $192,275 total interest, $41,875 saving, $17,025 cost-of-delay, GTAP Armington elasticity 3.8 textiles, etc.) |
+| **LangGraph implementation skeleton** | `hedge_advisor_graph_skeleton.py` |
+
+---
+
+## 3. File that the source chat attempted to write but is NOT currently on disk
 
 | File path | Status |
 |---|---|
 | `C:\SATHYA\CHAINAIM3003\mcp-servers\FINAGENTS\FINAGENTS1\ACTUS-MENTOR-MCP\HACKATHON_IDEATION.md` | ❌ NOT present at this path as of 2026-05-15 |
 
-**What was meant to be in it (per source-chat content):**
-- Project 1 — LegentPro: Trustworthy Autonomous Procurement
-- Project 2 — ACTUS Hedge Advisor
-- Project 3 — (third route)
-- Hackathon framing: lablab.ai · Transforming Enterprise Through AI · Tracks 1, 2, 4
-- Verified architecture of ACTUS-MENTOR-MCP (LangGraph 7-agent RAG, ChromaDB, Anthropic Claude default, MCP server with 6 tools, ACTUS reference server at 34.203.247.32:8083, XBRL parser/generator)
-- Frontend: React 18 + Vite, 14 pages, 12-language i18n
-
-**Honest read:** The source chat shows a `Filesystem:write_file` call to this path, but the file is not at that location today. Either:
+The source chat shows a `Filesystem:write_file` call to this path early in the conversation (covering Project 1, 2, 3 ideation). The file is not at that location today. Either:
 - (a) It was written but later moved/deleted
 - (b) The write call did not persist
 - (c) It is stored in a different path
 
-I have *not* verified which of (a)/(b)/(c) is correct — that would require either git log inspection or filesystem search beyond what was done here.
+I have *not* verified which of (a)/(b)/(c) is correct.
+
+**Note:** the BOWTIE_REFRAMED file came LATER in the same chat as a deliberate rewrite of Project 2 only — so even if `HACKATHON_IDEATION.md` were recovered, its Project 2 section would be the *older* framing and would be superseded by `PROJECT2_BOWTIE_REFRAMED.md`.
 
 ---
 
-## 3. Files in this DESIGN1 folder (the present extraction)
+## 4. Files in this DESIGN1 folder (the present extraction)
 
 Folder: `C:\SATHYA\CHAINAIM3003\mcp-servers\FINAGENTS\FINAGENTS2\entAgentProject21\DESIGN\DESIGN1\`
 
-| File | Contents |
-|---|---|
-| `design-1-problem-solution-impact.md` | Refined problem statement, refined solution, impact (market sizing + DRAPS hard dollar evidence + track fit) |
-| `design-1-conceptual-design.md` | Bow-tie conceptual design + the full ASCII wiring diagram + agent-type law |
-| `design-1-detailed-design.md` | Textual graph of 8 agents + edges + invariants + verified external contracts + knot substructure |
-| `design-1-files-on-disk.md` | This file — inventory of what was on disk from the source chat |
+| File | Contents | Source on disk |
+|---|---|---|
+| `design-1-problem-solution-impact.md` | Spine (bow-tie + agent-type law) + Sections 1, 2, 3 of BOWTIE_REFRAMED | `PROJECT2_BOWTIE_REFRAMED.md` |
+| `design-1-conceptual-design.md` | Section 4 (bow-tie ASCII diagram) + extension pattern + track fit | `PROJECT2_BOWTIE_REFRAMED.md` |
+| `design-1-detailed-design.md` | N0–N8 textual graph (from chat response) + Sections 5, 6, Bottom line | `PROJECT2_BOWTIE_REFRAMED.md` + chat response |
+| `design-1-files-on-disk.md` | This file — inventory of what was on disk | direct filesystem reads |
 
 ---
 
-## 4. Cross-reference: where the originals live vs. where this extraction lives
+## 5. Cross-reference: where the originals live vs. where this extraction lives
 
 ```
 SOURCE FILES (from Long FIN Agents-Team-1):
   C:\SATHYA\CHAINAIM3003\mcp-servers\LEGENT-PROC\
-    ├── hedge_advisor_graph_skeleton.py    (Python — LangGraph skeleton code)
-    ├── PROJECT2_ACTUS_HEDGE_ADVISOR.md    (main design doc)
-    └── PROJECT2_BOWTIE_REFRAMED.md        (bow-tie reframing)
+    ├── PROJECT2_BOWTIE_REFRAMED.md       << LATEST authoritative version
+    ├── PROJECT2_ACTUS_HEDGE_ADVISOR.md   << earlier draft, superseded
+    └── hedge_advisor_graph_skeleton.py   (Python — LangGraph skeleton code)
 
 THIS EXTRACTION (clean, versioned):
   C:\SATHYA\CHAINAIM3003\mcp-servers\FINAGENTS\FINAGENTS2\entAgentProject21\DESIGN\DESIGN1\
-    ├── design-1-problem-solution-impact.md
-    ├── design-1-conceptual-design.md
-    ├── design-1-detailed-design.md
-    └── design-1-files-on-disk.md           (this file)
+    ├── design-1-problem-solution-impact.md   (from BOWTIE_REFRAMED §1, 2, 3)
+    ├── design-1-conceptual-design.md         (from BOWTIE_REFRAMED §4)
+    ├── design-1-detailed-design.md           (chat textual graph + BOWTIE_REFRAMED §5, 6, bottom line)
+    └── design-1-files-on-disk.md              (this file)
 ```
-
-The DESIGN1 folder is the **clean, structured extraction** of Project 2 from that chat — the source files in LEGENT-PROC remain the working drafts.
 
 ---
 
-## 5. What is NOT yet on disk (and was not produced in the source chat)
+## 6. What is NOT yet on disk (and was not produced in the source chat)
 
 For full implementation, these are still to-build:
 
@@ -101,6 +103,13 @@ For full implementation, these are still to-build:
 - The Memory Agent persistence backend (the only genuinely new build)
 - The `hedge_relationship` block extension for the Disclosure Agent (~30 lines)
 - Tests, deployment scripts, a UI
+
+---
+
+## 7. Correction history of this DESIGN1 extraction
+
+- **v1 (overwritten)**: First pass used the older "cross-border exporters" framing from `PROJECT2_ACTUS_HEDGE_ADVISOR.md`. This was incorrect — that file is the earlier draft.
+- **v2 (current)**: Corrected to use `PROJECT2_BOWTIE_REFRAMED.md` (the LATEST authoritative version) for all of problem, solution, impact, and conceptual design. The textual graph in `design-1-detailed-design.md` is preserved from the source chat response (it complements the BOWTIE_REFRAMED bow-tie diagram with explicit node IDs and edges).
 
 ---
 
