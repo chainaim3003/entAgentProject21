@@ -1,0 +1,50 @@
+# One-command local startup: backend + frontend.
+# Run with:  docker compose up --build
+#
+# NOTE: requires a `.env` file at backend/.env  (copy backend/.env.example).
+# Without GEMINI_API_KEY / DRAPS_MCP_URL / ACTUS_MENTOR_URL the backend will fail-fast on startup.
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile_inline: |
+        FROM python:3.11-slim
+        WORKDIR /app
+        COPY requirements.txt .
+        RUN pip install --no-cache-dir -r requirements.txt
+        COPY . .
+        CMD ["python", "-m", "main"]
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+      - hedge_state:/app/state
+    environment:
+      - CHECKPOINT_DB_URL=sqlite:////app/state/checkpoints.db
+      - MEMORY_DB_URL=sqlite:////app/state/memory.db
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile_inline: |
+        FROM node:20-alpine
+        WORKDIR /app
+        COPY package.json package-lock.json* ./
+        RUN npm install
+        COPY . .
+        CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_BACKEND_URL=http://localhost:8000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  hedge_state:
