@@ -61,7 +61,10 @@ class HedgeAdvisorState(TypedDict, total=False):
     raw_inputs: dict | None
 
     # Produced by N2 MARKET-CONTEXT  [PUBLIC data enters here]
-    market_context: dict | None
+    # NOTE: state-key renamed from `market_context` to `public_market_context`
+    # because LangGraph 1.x forbids a node name and state key from matching
+    # (the node is still called `market_context`).
+    public_market_context: dict | None
 
     # Produced by N3 INPUT-VALIDATOR  (the boundary)
     validated_inputs: dict | None

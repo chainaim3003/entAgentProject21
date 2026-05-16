@@ -118,9 +118,24 @@ async def run(request: Request, body: RunRequest) -> RunResponse:
 
 
 async def _invoke_graph(graph_app, initial_state: dict, config: dict) -> None:
-    """Run the graph to completion in the background."""
-    # graph_app.ainvoke is async; the SqliteSaver writes checkpoints as the graph progresses.
-    await graph_app.ainvoke(initial_state, config=config)
+    """Run the graph to completion in the background.
+
+    On any unexpected exception, log full traceback to terminal. The /trace
+    SSE handler reads the task state directly (via the runs registry) and
+    surfaces the exception to the UI as a 'done' event with failure details.
+    """
+    import logging
+    import traceback
+    logger = logging.getLogger("hedge_advisor")
+    try:
+        await graph_app.ainvoke(initial_state, config=config)
+    except Exception:
+        tb = traceback.format_exc()
+        thread_id = config.get("configurable", {}).get("thread_id")
+        logger.error("Graph crashed for thread %s:\n%s", thread_id, tb)
+        # Re-raise so the task's exception is preserved (task.exception() will
+        # return it). The /trace handler reads this and forwards to the UI.
+        raise
 
 
 # ───────────────────────────────────────────────────────────────────────
@@ -132,9 +147,11 @@ async def trace(request: Request, thread_id: str = Query(..., min_length=1)):
     """Stream agent progress for a given thread_id via Server-Sent Events.
 
     Each event is the latest audit_log entry that has not yet been streamed.
-    Closes when the run terminates (memory_record_id set OR failure set).
+    Closes when the run terminates (memory_record_id set OR failure set OR
+    background task crashed with an exception).
     """
     graph_app = _get_app(request)
+    runs = _get_runs(request)
     config = {"configurable": {"thread_id": thread_id}}
 
     async def stream() -> AsyncGenerator[dict, None]:
@@ -143,7 +160,41 @@ async def trace(request: Request, thread_id: str = Query(..., min_length=1)):
             if await request.is_disconnected():
                 break
 
-            snapshot = graph_app.get_state(config)
+            # Check if the background task crashed (uncaught exception)
+            task = runs.get(thread_id)
+            if task is not None and task.done():
+                exc = task.exception()
+                if exc is not None:
+                    # Re-fetch state one more time to catch any audit entries
+                    # that were written just before the crash
+                    snapshot = await graph_app.aget_state(config)
+                    state = (snapshot.values if snapshot else {}) or {}
+                    audit = state.get("audit_log") or []
+                    while seen < len(audit):
+                        entry = audit[seen]
+                        seen += 1
+                        yield {"event": "node", "data": json.dumps(entry, default=str)}
+                    # Find last node name from audit if available
+                    last_node = audit[-1].get("node", "unknown") if audit else "unknown"
+                    yield {
+                        "event": "done",
+                        "data": json.dumps(
+                            {
+                                "status": "failed",
+                                "thread_id": thread_id,
+                                "failure": {
+                                    "reason": "backend_exception",
+                                    "errors": [f"{type(exc).__name__}: {str(exc)[:800]}"],
+                                    "retry_count": 0,
+                                    "last_node": last_node,
+                                },
+                            },
+                            default=str,
+                        ),
+                    }
+                    break
+
+            snapshot = await graph_app.aget_state(config)
             if snapshot is None:
                 # No checkpoints yet; wait briefly.
                 await asyncio.sleep(0.2)
@@ -205,7 +256,7 @@ async def resume(request: Request, body: ResumeRequest) -> ResumeResponse:
     runs = _get_runs(request)
     config = {"configurable": {"thread_id": body.thread_id}}
 
-    snapshot = graph_app.get_state(config)
+    snapshot = await graph_app.aget_state(config)
     if snapshot is None or not snapshot.values:
         raise HTTPException(
             status_code=404,

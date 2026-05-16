@@ -58,7 +58,7 @@ def validator_node(state: dict) -> dict:
     Nothing schema-dirty crosses this boundary. No LLM involved. Pure rules.
     """
     raw = state.get("raw_inputs") or {}
-    ctx = state.get("market_context") or {}
+    ctx = state.get("public_market_context") or {}
     errors: list[str] = []
 
     # Required fields from intake

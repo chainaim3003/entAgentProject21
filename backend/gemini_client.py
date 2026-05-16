@@ -14,12 +14,17 @@ The Input-Validator downstream will catch malformed extraction and trigger the b
 from __future__ import annotations
 
 import json
+import sys
 from typing import Any
 
 import google.generativeai as genai
 
 from config import settings
 
+# Allow JSON parsing of very large integers (Gemini sometimes emits scientific-notation
+# numbers that parse as huge ints). Python's default int conversion limit is 4300 digits,
+# which is too restrictive for LLM-generated JSON.
+sys.set_int_max_str_digits(1000000)
 
 # Initialize once at import (fails fast if API key invalid format)
 genai.configure(api_key=settings.gemini_api_key)

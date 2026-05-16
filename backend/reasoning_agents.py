@@ -99,39 +99,35 @@ def orchestrator_node(state: dict) -> dict:
 
 INTAKE_SYSTEM = """\
 You extract a structured loan record from a private loan document and the user's question.
-Output JSON only, conforming to the schema. If a field cannot be determined from the document,
-return null for that field — do NOT invent values.
+Output JSON only, conforming to the schema. ALL FIELDS ARE REQUIRED — make your best inference
+from both the user question AND the loan document. Do NOT return null. Do NOT skip fields.
 
-Fields:
-  notional_usd     — loan principal in USD (number)
-  spread_bps       — credit spread over the reference rate, in basis points (number)
-  term_months      — original tenor in months (integer)
-  start_date       — origination date, ISO 8601 (YYYY-MM-DD)
-  rate_index       — reference rate name (e.g. SOFR, LIBOR, EURIBOR)
-  commodity_hint   — what the loan is financing, free text (e.g. "textiles imported from India")
-  corridor_hint    — origin->destination if mentioned (e.g. "India to US")
+Fields (all values must be realistic, plain numbers — NO scientific notation, NO huge values):
+  notional_usd     — loan principal in USD as a plain number (e.g. 1000000 for $1M)
+                     Must be between 1 and 1,000,000,000.
+  spread_bps       — credit spread over the reference rate, in basis points (integer 0-5000)
+                     e.g. 250 for 250bps. NOT a decimal like 0.025.
+  term_months      — original tenor in months, integer (e.g. 24 for 2 years). Range 1-600.
+  start_date       — origination date in ISO 8601 format "YYYY-MM-DD" (e.g. "2026-01-15")
+                     If not specified, use today's date.
+  rate_index       — reference rate name as a string (e.g. "SOFR", "LIBOR", "EURIBOR")
+                     For floating-rate USD loans, default to "SOFR".
+  commodity_hint   — what the loan is financing, free text (e.g. "textile imports from India")
+  corridor_hint    — origin->destination trade corridor (e.g. "India to US")
+                     If the user says "imports from X", set this to "X to US".
 """
 
 INTAKE_SCHEMA = {
     "type": "object",
     "properties": {
-        "notional_usd": {"type": ["number", "null"]},
-        "spread_bps": {"type": ["number", "null"]},
-        "term_months": {"type": ["integer", "null"]},
-        "start_date": {"type": ["string", "null"]},
-        "rate_index": {"type": ["string", "null"]},
-        "commodity_hint": {"type": ["string", "null"]},
-        "corridor_hint": {"type": ["string", "null"]},
+        "notional_usd": {"type": "number"},
+        "spread_bps": {"type": "number"},
+        "term_months": {"type": "integer"},
+        "start_date": {"type": "string"},
+        "rate_index": {"type": "string"},
+        "commodity_hint": {"type": "string"},
+        "corridor_hint": {"type": "string"},
     },
-    "required": [
-        "notional_usd",
-        "spread_bps",
-        "term_months",
-        "start_date",
-        "rate_index",
-        "commodity_hint",
-        "corridor_hint",
-    ],
 }
 
 
@@ -181,38 +177,38 @@ def intake_node(state: dict) -> dict:
 MARKET_CONTEXT_SYSTEM = """\
 You resolve public market context for a trade-finance loan, given the raw extraction from a private loan document.
 
-Output JSON only:
+Output JSON only. ALL fields are mandatory:
   gtap_commodity_code   — GTAP commodity code best matching the commodity_hint (string, e.g. "50" for textiles)
-  corridor              — origin and destination country ISO codes (e.g. {"origin": "IN", "destination": "US"})
-  tariff_assumption_pct — current tariff rate as a decimal (e.g. 0.25 for 25%); null if unknown
+  corridor              — origin and destination country ISO codes. THIS FIELD IS REQUIRED.
+                          Both 'origin' and 'destination' MUST be set to valid 2-letter ISO country codes.
+                          Examples: {"origin": "IN", "destination": "US"} for India->US,
+                                    {"origin": "CN", "destination": "US"} for China->US.
+                          If the corridor_hint says 'India' or 'imports from India', set origin=IN, destination=US.
+                          Infer destination=US when loan is in USD and origin country is mentioned.
+  tariff_assumption_pct — current tariff rate as a decimal (e.g. 0.25 for 25%)
   rate_curve_index      — the appropriate forward curve identifier (e.g. "USD-SOFR-FORWARD")
   notes                 — short free-text rationale
 
-Do NOT invent values. Use null when you cannot ground the field in public knowledge.
+Make your best inference for each field. Do not return null or skip fields.
 """
 
 MARKET_CONTEXT_SCHEMA = {
     "type": "object",
     "properties": {
-        "gtap_commodity_code": {"type": ["string", "null"]},
+        "gtap_commodity_code": {"type": "string"},
         "corridor": {
-            "type": ["object", "null"],
+            "type": "object",
             "properties": {
                 "origin": {"type": "string"},
                 "destination": {"type": "string"},
             },
+            "required": ["origin", "destination"],
         },
-        "tariff_assumption_pct": {"type": ["number", "null"]},
-        "rate_curve_index": {"type": ["string", "null"]},
+        "tariff_assumption_pct": {"type": "number"},
+        "rate_curve_index": {"type": "string"},
         "notes": {"type": "string"},
     },
-    "required": [
-        "gtap_commodity_code",
-        "corridor",
-        "tariff_assumption_pct",
-        "rate_curve_index",
-        "notes",
-    ],
+    "required": ["gtap_commodity_code", "corridor", "rate_curve_index"],
 }
 
 
@@ -246,7 +242,7 @@ def market_context_node(state: dict) -> dict:
     summary = "resolved " + ", ".join(summary_bits) if summary_bits else "resolved (with nulls)"
 
     return {
-        "market_context": ctx,
+        "public_market_context": ctx,
         "audit_log": [_audit_entry("market_context", summary, ctx)],
     }
 
@@ -277,10 +273,10 @@ INTERPRETATION_SCHEMA = {
     "properties": {
         "winner": {"type": "string", "enum": ["A", "B", "C"]},
         "predicted_saving_usd": {"type": "number"},
-        "cost_of_delay_usd": {"type": ["number", "null"]},
+        "cost_of_delay_usd": {"type": "number"},
         "rationale": {"type": "string"},
     },
-    "required": ["winner", "predicted_saving_usd", "cost_of_delay_usd", "rationale"],
+    "required": ["winner", "predicted_saving_usd", "rationale"],
 }
 
 

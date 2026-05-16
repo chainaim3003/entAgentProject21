@@ -20,8 +20,10 @@ Reference: SWAPS-1LOAN-WHAT-IF-DEMO.json (the Postman collection that defines pr
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -30,10 +32,31 @@ from config import settings
 
 logger = logging.getLogger("draps_client")
 
-# The Postman collection file DRAPS loads to seed the simulation. Lives on the
-# DRAPS server's disk (typically in its config folder). Override if your DRAPS
-# deployment uses a different collection.
+# The Postman collection file that seeds the simulation.
+# OPTION 2 (inline contract): the file now lives INSIDE entAgent at
+# entAgentProject21/DATA/SWAPS-1LOAN-WHAT-IF-DEMO.json. Single source of truth.
+# We read it here and ship the FULL CONTENT to DRAPS under `collection_inline`,
+# so DRAPS never touches its own disk for this file. See CHANGES-OPTION2.md.
 _DEFAULT_COLLECTION = "SWAPS-1LOAN-WHAT-IF-DEMO.json"
+_COLLECTION_PATH = (
+    Path(__file__).resolve().parent.parent / "DATA" / _DEFAULT_COLLECTION
+)
+
+
+def _load_collection_content() -> dict[str, Any]:
+    """Read SWAPS-1LOAN-WHAT-IF-DEMO.json from entAgent/DATA and return its parsed content.
+
+    Raises:
+        FileNotFoundError: if the file is missing — honest failure, no fallback.
+        json.JSONDecodeError: if the file is malformed — honest failure, no fallback.
+    """
+    if not _COLLECTION_PATH.is_file():
+        raise FileNotFoundError(
+            f"Collection file not found: {_COLLECTION_PATH}. "
+            "Place SWAPS-1LOAN-WHAT-IF-DEMO.json under entAgentProject21/DATA/."
+        )
+    with _COLLECTION_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
 
 # Scenario offsets that DEFINE A/B/C in the bow-tie architecture (NOT mocked —
 # these are the structural definition of the scenarios in the design):
@@ -89,10 +112,25 @@ def _build_config_data(validated: dict[str, Any]) -> dict[str, Any]:
     tariff_current = tariff if tariff is not None else 0.0
     tariff_peak = tariff_current
 
+    # Inline the collection content (Option 2 contract). DRAPS reads
+    # config_metadata.collection_inline if present and skips its own disk load.
+    # collection_file is kept ONLY as a label for logging/audit on the DRAPS side.
+    collection_content = _load_collection_content()
+
     return {
         "config_metadata": {
             "config_id": f"hedge-advisor-{notional}-{commodity}",
             "collection_file": _DEFAULT_COLLECTION,
+            "collection_inline": collection_content,
+        },
+        "jurisdiction": {
+            "source": "file",
+            "file": "jurisdictions/us-genius.json",
+        },
+        "simulation_timeframe": {
+            "start_date": start_date,
+            "end_date": maturity_date,
+            "frequency": "monthly",
         },
         "loan_notional": notional,
         "loan_start_date": start_date,
@@ -118,6 +156,45 @@ def _extract_scenarios(response_json: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError(
             f"DRAPS returned non-object JSON: {type(response_json).__name__}"
         )
+
+    # 0) DRAPS scripted-collection shape — totals are written by test scripts via
+    #    pm.environment.set('A_total', …) and exposed under `environmentVariables`.
+    #    Values arrive as STRINGS (pm.environment stores them via String(value)).
+    def _as_float(v: Any) -> float | None:
+        if isinstance(v, bool):
+            return None
+        if isinstance(v, (int, float)):
+            return float(v)
+        if isinstance(v, str):
+            try:
+                return float(v)
+            except ValueError:
+                return None
+        return None
+
+    env_vars = response_json.get("environmentVariables")
+    if not isinstance(env_vars, dict):
+        # On failure DRAPS wraps the result under "details"
+        details = response_json.get("details")
+        if isinstance(details, dict):
+            env_vars = details.get("environmentVariables")
+
+    if isinstance(env_vars, dict):
+        a = _as_float(env_vars.get("A_total"))
+        b = _as_float(env_vars.get("B_total"))
+        c = _as_float(env_vars.get("C_total"))
+        if all(v is not None for v in (a, b, c)):
+            # Pull cashflow events from the captured ACTUS POST response, if any.
+            sim = response_json.get("simulation")
+            if not isinstance(sim, list):
+                details = response_json.get("details") or {}
+                sim = details.get("simulation") if isinstance(details, dict) else None
+            events: list[dict] = []
+            if isinstance(sim, list):
+                for contract in sim:
+                    if isinstance(contract, dict) and isinstance(contract.get("events"), list):
+                        events.extend(contract["events"])
+            return {"A_total": a, "B_total": b, "C_total": c, "events": events}
 
     # 1) Flat top-level shape
     flat = {k: response_json.get(k) for k in ("A_total", "B_total", "C_total")}

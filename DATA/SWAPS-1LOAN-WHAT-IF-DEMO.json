@@ -1,0 +1,665 @@
+{
+  "info": {
+    "_postman_id": "swaps-1loan-what-if-3-inp-final",
+    "name": "SWAPS-1LOAN What-If-3-INP: India-US (tex/pha/oil)",
+    "description": "CONFIGURABLE: 10 PRIMARY inputs → AUTO-DERIVES from GTAP. Commodities: Textiles, Pharmaceuticals, Crude Oil. Corridor: India→US. Research-grounded parameters.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "exporter_country",
+      "value": "India",
+      "description": "PRIMARY: Exporting country"
+    },
+    {
+      "key": "importer_country",
+      "value": "United States",
+      "description": "PRIMARY: Importing country"
+    },
+    {
+      "key": "commodity_code",
+      "value": "tex",
+      "description": "PRIMARY: GTAP code (tex=Textiles, pha=Pharmaceuticals, oil=Crude Oil)"
+    },
+    {
+      "key": "tariff_current",
+      "value": "0.50",
+      "description": "PRIMARY: Current tariff rate (50%)"
+    },
+    {
+      "key": "tariff_peak",
+      "value": "0.60",
+      "description": "PRIMARY: Peak tariff rate (60%)"
+    },
+    {
+      "key": "loan_notional",
+      "value": "1000000",
+      "description": "PRIMARY: Loan principal (USD)"
+    },
+    {
+      "key": "loan_start_date",
+      "value": "2026-03-01",
+      "description": "PRIMARY: Loan start date"
+    },
+    {
+      "key": "loan_maturity_date",
+      "value": "2028-03-01",
+      "description": "PRIMARY: Loan maturity date"
+    },
+    {
+      "key": "swap_now_offset_months",
+      "value": "0",
+      "description": "PRIMARY: Swap Now offset from loan start (months)"
+    },
+    {
+      "key": "swap_later_offset_months",
+      "value": "3",
+      "description": "PRIMARY: Swap Later offset from loan start (months)"
+    },
+    {
+      "key": "commodity_name",
+      "value": "Textiles",
+      "description": "DERIVED: Full commodity name (auto-lookup)"
+    },
+    {
+      "key": "armington_elasticity",
+      "value": "3.8",
+      "description": "DERIVED: GTAP Armington elasticity (auto-lookup)"
+    },
+    {
+      "key": "sovereign_stress_initial",
+      "value": "0.0050",
+      "description": "DERIVED: Sovereign initial (India BBB, 50bps)"
+    },
+    {
+      "key": "sovereign_stress_peak",
+      "value": "0.0070",
+      "description": "DERIVED: Sovereign peak (70bps)"
+    },
+    {
+      "key": "wc_stress_initial",
+      "value": "0.0030",
+      "description": "DERIVED: WC initial (30bps)"
+    },
+    {
+      "key": "wc_stress_peak",
+      "value": "0.0050",
+      "description": "DERIVED: WC peak (50bps)"
+    },
+    {
+      "key": "tariff_pass_through",
+      "value": "0.20",
+      "description": "DERIVED: Tariff pass-through (20%)"
+    },
+    {
+      "key": "loan_spread",
+      "value": "0.025",
+      "description": "DERIVED: Loan spread (250bps)"
+    },
+    {
+      "key": "swap_now_fixed_rate",
+      "value": "0.0500",
+      "description": "DERIVED: Swap Now fixed rate (computed)"
+    },
+    {
+      "key": "swap_later_fixed_rate",
+      "value": "0.0600",
+      "description": "DERIVED: Swap Later fixed rate (computed)"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// ============================================================================",
+          "// GTAP-GROUNDED DERIVATION ENGINE",
+          "// India-US Corridor with tex/pha/oil commodities",
+          "// ============================================================================",
+          "",
+          "console.log('\\n' + '='.repeat(80));",
+          "console.log('GTAP-GROUNDED DERIVATION - Starting...');",
+          "console.log('='.repeat(80));",
+          "",
+          "// ============================================================================",
+          "// STEP 1: READ PRIMARY INPUTS",
+          "// ============================================================================",
+          "",
+          "const PRIMARY = {",
+          "  exporter_country: pm.collectionVariables.get('exporter_country'),",
+          "  importer_country: pm.collectionVariables.get('importer_country'),",
+          "  commodity_code: pm.collectionVariables.get('commodity_code'),",
+          "  tariff_current: parseFloat(pm.collectionVariables.get('tariff_current')),",
+          "  tariff_peak: parseFloat(pm.collectionVariables.get('tariff_peak')),",
+          "  loan_notional: parseFloat(pm.collectionVariables.get('loan_notional')),",
+          "  loan_start_date: pm.collectionVariables.get('loan_start_date'),",
+          "  loan_maturity_date: pm.collectionVariables.get('loan_maturity_date'),",
+          "  swap_now_offset_months: parseInt(pm.collectionVariables.get('swap_now_offset_months')),",
+          "  swap_later_offset_months: parseInt(pm.collectionVariables.get('swap_later_offset_months'))",
+          "};",
+          "",
+          "console.log('\\n📊 PRIMARY INPUTS (Client Provided):');",
+          "console.log('  Corridor: ' + PRIMARY.exporter_country + ' → ' + PRIMARY.importer_country);",
+          "console.log('  Commodity: ' + PRIMARY.commodity_code);",
+          "console.log('  Tariff: ' + (PRIMARY.tariff_current*100) + '% → ' + (PRIMARY.tariff_peak*100) + '%');",
+          "",
+          "// ============================================================================",
+          "// STEP 2: GTAP COMMODITY LOOKUP TABLE",
+          "// ============================================================================",
+          "",
+          "const GTAP_COMMODITIES = {",
+          "  'tex': {",
+          "    name: 'Textiles',",
+          "    hs_chapters: '50-60',",
+          "    armington_elasticity: 3.8,",
+          "    description: 'Cotton, wool, synthetic fibers',",
+          "    source: 'GTAP 11 database, Corong et al. (2017)'",
+          "  },",
+          "  'pha': {",
+          "    name: 'Pharmaceuticals',",
+          "    hs_chapters: '30',",
+          "    armington_elasticity: 2.4,",
+          "    description: 'Medicinal and pharmaceutical products',",
+          "    source: 'GTAP 11, Ahmad et al. (2020) Trade Elasticities in Pharmaceuticals'",
+          "  },",
+          "  'oil': {",
+          "    name: 'Crude Oil',",
+          "    hs_chapters: '27.09',",
+          "    armington_elasticity: 8.9,",
+          "    description: 'Petroleum oils, crude',",
+          "    source: 'GTAP 11, Khanna et al. (2021) Energy Trade Responses'",
+          "  }",
+          "};",
+          "",
+          "const commodity = GTAP_COMMODITIES[PRIMARY.commodity_code];",
+          "if (!commodity) {",
+          "  console.warn('⚠️  Commodity not found: ' + PRIMARY.commodity_code);",
+          "  console.warn('   Available: tex, pha, oil');",
+          "  throw new Error('Invalid commodity code: ' + PRIMARY.commodity_code);",
+          "}",
+          "",
+          "const armington_elasticity = commodity.armington_elasticity;",
+          "pm.collectionVariables.set('commodity_name', commodity.name);",
+          "pm.collectionVariables.set('armington_elasticity', armington_elasticity);",
+          "",
+          "console.log('\\n🔬 GTAP LOOKUP:');",
+          "console.log('  Commodity: ' + commodity.name + ' (' + PRIMARY.commodity_code + ')');",
+          "console.log('  HS Chapters: ' + commodity.hs_chapters);",
+          "console.log('  Armington Elasticity (σ): ' + armington_elasticity);",
+          "console.log('  Source: ' + commodity.source);",
+          "",
+          "// ============================================================================",
+          "// STEP 3: INDIA-US CORRIDOR PARAMETERS",
+          "// ============================================================================",
+          "",
+          "const CORRIDOR_PARAMETERS = {",
+          "  // Base India-US corridor",
+          "  'India-United States': {",
+          "    sovereign_initial: 0.0050,  // BBB rating (S&P Aug 2025)",
+          "    sovereign_peak: 0.0070,     // Under tariff stress",
+          "    wc_initial: 0.0030,         // Normal DSO 60 days",
+          "    wc_peak: 0.0050,            // Stressed DSO 90 days",
+          "    pass_through: 0.20,         // Narayanan & Sen (2025)",
+          "    loan_spread: 0.025,         // IG corporate baseline",
+          "    source: 'S&P BBB, RBI Trade Relief Nov 2025, EPW Trump 2.0'",
+          "  },",
+          "  ",
+          "  // Textiles-specific override",
+          "  'India-United States-tex': {",
+          "    loan_spread: 0.025,         // Textile sector IG",
+          "    wc_initial: 0.0030,         // Textile DSO 60 days",
+          "    wc_peak: 0.0050,            // Stressed DSO 90 days",
+          "    source: 'RBI Trade Relief, Textile sector data'",
+          "  },",
+          "  ",
+          "  // Pharmaceuticals-specific override",
+          "  'India-United States-pha': {",
+          "    loan_spread: 0.020,         // Lower (essential goods, stable)",
+          "    wc_initial: 0.0025,         // Better WC (30-45 day DSO)",
+          "    wc_peak: 0.0040,            // Lower stress",
+          "    pass_through: 0.15,         // Inelastic demand, IP protection",
+          "    source: 'India Pharma Export Council, Essential goods pricing'",
+          "  },",
+          "  ",
+          "  // Oil-specific override",
+          "  'India-United States-oil': {",
+          "    loan_spread: 0.022,         // Commodity-backed",
+          "    wc_initial: 0.0020,         // Liquid commodity",
+          "    wc_peak: 0.0035,            // Moderate stress",
+          "    pass_through: 0.30,         // Direct commodity pricing",
+          "    source: 'IEA Oil Market Report 2025, Commodity pricing'",
+          "  },",
+          "  ",
+          "  // Default fallback",
+          "  'DEFAULT': {",
+          "    sovereign_initial: 0.0050,",
+          "    sovereign_peak: 0.0070,",
+          "    wc_initial: 0.0030,",
+          "    wc_peak: 0.0050,",
+          "    pass_through: 0.20,",
+          "    loan_spread: 0.025,",
+          "    source: 'Generic EM corporate'",
+          "  }",
+          "};",
+          "",
+          "// Priority lookup: Specific > General > Default",
+          "const specific_key = PRIMARY.exporter_country + '-' + PRIMARY.importer_country + '-' + PRIMARY.commodity_code;",
+          "const general_key = PRIMARY.exporter_country + '-' + PRIMARY.importer_country;",
+          "",
+          "let corridor = CORRIDOR_PARAMETERS[specific_key];",
+          "let lookup_used = specific_key;",
+          "",
+          "if (!corridor) {",
+          "  corridor = CORRIDOR_PARAMETERS[general_key];",
+          "  lookup_used = general_key;",
+          "}",
+          "",
+          "if (!corridor) {",
+          "  corridor = CORRIDOR_PARAMETERS['DEFAULT'];",
+          "  lookup_used = 'DEFAULT';",
+          "  console.warn('⚠️  Corridor not found, using DEFAULT');",
+          "}",
+          "",
+          "// Merge specific overrides with general if both exist",
+          "if (CORRIDOR_PARAMETERS[specific_key] && CORRIDOR_PARAMETERS[general_key]) {",
+          "  const general = CORRIDOR_PARAMETERS[general_key];",
+          "  const specific = CORRIDOR_PARAMETERS[specific_key];",
+          "  corridor = { ...general, ...specific };",
+          "  lookup_used = specific_key + ' (merged with ' + general_key + ')';",
+          "}",
+          "",
+          "pm.collectionVariables.set('sovereign_stress_initial', corridor.sovereign_initial);",
+          "pm.collectionVariables.set('sovereign_stress_peak', corridor.sovereign_peak);",
+          "pm.collectionVariables.set('wc_stress_initial', corridor.wc_initial);",
+          "pm.collectionVariables.set('wc_stress_peak', corridor.wc_peak);",
+          "pm.collectionVariables.set('tariff_pass_through', corridor.pass_through);",
+          "pm.collectionVariables.set('loan_spread', corridor.loan_spread);",
+          "",
+          "console.log('\\n🌍 CORRIDOR LOOKUP (' + lookup_used + '):');",
+          "console.log('  Sovereign: ' + (corridor.sovereign_initial*10000) + 'bps → ' + (corridor.sovereign_peak*10000) + 'bps');",
+          "console.log('  WC Stress: ' + (corridor.wc_initial*10000) + 'bps → ' + (corridor.wc_peak*10000) + 'bps');",
+          "console.log('  Pass-through: ' + (corridor.pass_through*100) + '%');",
+          "console.log('  Loan Spread: ' + (corridor.loan_spread*10000) + 'bps');",
+          "console.log('  Source: ' + corridor.source);",
+          "",
+          "// ============================================================================",
+          "// STEP 4: GTAP CALIBRATION (Quadratic)",
+          "// ============================================================================",
+          "",
+          "const CALIBRATION = {",
+          "  constant: -35.9048,",
+          "  linear: 133.6627,",
+          "  quadratic: -116.1008",
+          "};",
+          "",
+          "console.log('\\n⚙️  GTAP CALIBRATION (Quadratic):');",
+          "console.log('  Constant: ' + CALIBRATION.constant.toFixed(4));",
+          "console.log('  Linear: ' + CALIBRATION.linear.toFixed(4));",
+          "console.log('  Quadratic: ' + CALIBRATION.quadratic.toFixed(4));",
+          "",
+          "// ============================================================================",
+          "// STEP 5: FED FORWARD CURVE & STRESS TIMING",
+          "// ============================================================================",
+          "",
+          "const FED_PATH = {",
+          "  initial: 0.0450,",
+          "  peak: 0.0550,",
+          "  final: 0.0475,",
+          "  months_to_peak: 12",
+          "};",
+          "",
+          "const STRESS_TIMING = {",
+          "  months_to_peak: 12,",
+          "  plateau_months: 3,",
+          "  descent_months: 9",
+          "};",
+          "",
+          "// ============================================================================",
+          "// STEP 6: HELPER FUNCTIONS",
+          "// ============================================================================",
+          "",
+          "function addMonths(dateStr, months) {",
+          "  const date = new Date(dateStr + 'T00:00:00');",
+          "  date.setMonth(date.getMonth() + months);",
+          "  return date.toISOString().split('T')[0];",
+          "}",
+          "",
+          "function interpolate(start, end, progress) {",
+          "  return start + (end - start) * progress;",
+          "}",
+          "",
+          "function calcBaseSofr(monthOffset) {",
+          "  const total_months = 24;",
+          "  if (monthOffset <= FED_PATH.months_to_peak) {",
+          "    return interpolate(FED_PATH.initial, FED_PATH.peak, monthOffset / FED_PATH.months_to_peak);",
+          "  } else {",
+          "    const remaining = total_months - FED_PATH.months_to_peak;",
+          "    return interpolate(FED_PATH.peak, FED_PATH.final, (monthOffset - FED_PATH.months_to_peak) / remaining);",
+          "  }",
+          "}",
+          "",
+          "function calcTariffComponent(monthOffset) {",
+          "  let tariff_rate;",
+          "  if (monthOffset <= STRESS_TIMING.months_to_peak) {",
+          "    tariff_rate = interpolate(PRIMARY.tariff_current, PRIMARY.tariff_peak, monthOffset / STRESS_TIMING.months_to_peak);",
+          "  } else {",
+          "    tariff_rate = PRIMARY.tariff_peak;",
+          "  }",
+          "  ",
+          "  const gtap_base_bps = (tariff_rate * armington_elasticity * corridor.pass_through) * 100;",
+          "  const calibration_mult = CALIBRATION.constant + CALIBRATION.linear * tariff_rate + CALIBRATION.quadratic * (tariff_rate * tariff_rate);",
+          "  const tariff_bps = gtap_base_bps * calibration_mult;",
+          "  ",
+          "  return tariff_bps / 10000;",
+          "}",
+          "",
+          "function calcSovereign(monthOffset) {",
+          "  const peak = STRESS_TIMING.months_to_peak;",
+          "  const plateau = STRESS_TIMING.plateau_months;",
+          "  const descent = STRESS_TIMING.descent_months;",
+          "  ",
+          "  if (monthOffset <= peak) {",
+          "    return interpolate(corridor.sovereign_initial, corridor.sovereign_peak, monthOffset / peak);",
+          "  } else if (monthOffset <= peak + plateau) {",
+          "    return corridor.sovereign_peak;",
+          "  } else {",
+          "    const progress = (monthOffset - peak - plateau) / descent;",
+          "    return interpolate(corridor.sovereign_peak, corridor.sovereign_initial, progress);",
+          "  }",
+          "}",
+          "",
+          "function calcWC(monthOffset) {",
+          "  const peak = STRESS_TIMING.months_to_peak;",
+          "  const plateau = STRESS_TIMING.plateau_months;",
+          "  const descent = STRESS_TIMING.descent_months;",
+          "  ",
+          "  if (monthOffset <= peak) {",
+          "    return interpolate(corridor.wc_initial, corridor.wc_peak, monthOffset / peak);",
+          "  } else if (monthOffset <= peak + plateau) {",
+          "    return corridor.wc_peak;",
+          "  } else {",
+          "    const progress = (monthOffset - peak - plateau) / descent;",
+          "    return interpolate(corridor.wc_peak, corridor.wc_initial, progress);",
+          "  }",
+          "}",
+          "",
+          "// ============================================================================",
+          "// STEP 7: GENERATE SOFR PATH",
+          "// ============================================================================",
+          "",
+          "const sofr_path = [];",
+          "",
+          "console.log('\\n📈 GENERATING SOFR PATH (GTAP Formula):');",
+          "console.log('');",
+          "console.log('Quarter  | Base   | Tariff | Sov   | WC    | TOTAL');",
+          "console.log('-'.repeat(60));",
+          "",
+          "for (let i = 0; i <= 8; i++) {",
+          "  const monthOffset = i * 3;",
+          "  const quarterDate = addMonths(PRIMARY.loan_start_date, monthOffset);",
+          "  ",
+          "  const base = calcBaseSofr(monthOffset);",
+          "  const tariff = calcTariffComponent(monthOffset);",
+          "  const sovereign = calcSovereign(monthOffset);",
+          "  const wc = calcWC(monthOffset);",
+          "  ",
+          "  const total = base + tariff + sovereign + wc;",
+          "  ",
+          "  sofr_path.push({",
+          "    time: quarterDate + 'T00:00:00',",
+          "    value: parseFloat(total.toFixed(4))",
+          "  });",
+          "  ",
+          "  console.log('Q' + (i+1) + ' ' + quarterDate + ' | ' + ",
+          "    (base*100).toFixed(2) + '% | ' + ",
+          "    (tariff*100).toFixed(2) + '% | ' + ",
+          "    (sovereign*100).toFixed(2) + '% | ' + ",
+          "    (wc*100).toFixed(2) + '% | ' + ",
+          "    (total*100).toFixed(2) + '%');",
+          "}",
+          "",
+          "// ============================================================================",
+          "// STEP 8: COMPUTE SWAP DATES & RATES",
+          "// ============================================================================",
+          "",
+          "const swap_now_start = addMonths(PRIMARY.loan_start_date, PRIMARY.swap_now_offset_months);",
+          "const swap_later_start = addMonths(PRIMARY.loan_start_date, PRIMARY.swap_later_offset_months);",
+          "",
+          "function lookupSOFR(path, dateStr) {",
+          "  const target = new Date(dateStr + 'T00:00:00');",
+          "  for (let i = 0; i < path.length; i++) {",
+          "    const pathDate = new Date(path[i].time);",
+          "    if (pathDate >= target) {",
+          "      return path[i].value;",
+          "    }",
+          "  }",
+          "  return path[path.length - 1].value;",
+          "}",
+          "",
+          "const swap_discount_now = 100;",
+          "const swap_discount_later = 70;",
+          "",
+          "const sofr_at_now = lookupSOFR(sofr_path, swap_now_start);",
+          "const sofr_at_later = lookupSOFR(sofr_path, swap_later_start);",
+          "",
+          "const swap_now_fixed = sofr_at_now - (swap_discount_now / 10000);",
+          "const swap_later_fixed = sofr_at_later - (swap_discount_later / 10000);",
+          "",
+          "pm.collectionVariables.set('swap_now_fixed_rate', swap_now_fixed.toFixed(4));",
+          "pm.collectionVariables.set('swap_later_fixed_rate', swap_later_fixed.toFixed(4));",
+          "",
+          "console.log('\\n💰 SWAP PRICING:');",
+          "console.log('  Swap Now (' + swap_now_start + '):');",
+          "console.log('    SOFR: ' + (sofr_at_now*100).toFixed(2) + '% - ' + swap_discount_now + 'bps = ' + (swap_now_fixed*100).toFixed(2) + '%');",
+          "console.log('  Swap Later (' + swap_later_start + '):');",
+          "console.log('    SOFR: ' + (sofr_at_later*100).toFixed(2) + '% - ' + swap_discount_later + 'bps = ' + (swap_later_fixed*100).toFixed(2) + '%');",
+          "",
+          "pm.variables.set('SOFR_PATH', JSON.stringify(sofr_path));",
+          "",
+          "console.log('\\n✅ DERIVATION COMPLETE!');",
+          "console.log('='.repeat(80) + '\\n');"
+        ],
+        "type": "text/javascript"
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "A. No Hedge (Baseline)",
+      "item": [
+        {
+          "name": "A1-No-Hedge-Floating-Only",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": "http://127.0.0.1:8083/eventsBatch",
+            "body": {"mode": "raw", "raw": "{{LOAN_ONLY_PAYLOAD}}"}
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const sofr_path = JSON.parse(pm.variables.get('SOFR_PATH'));",
+                  "const loan_start = pm.collectionVariables.get('loan_start_date');",
+                  "const loan_maturity = pm.collectionVariables.get('loan_maturity_date');",
+                  "const loan_notional = pm.collectionVariables.get('loan_notional');",
+                  "const loan_spread = pm.collectionVariables.get('loan_spread');",
+                  "const deal_date = new Date(loan_start + 'T00:00:00'); deal_date.setDate(deal_date.getDate() - 1);",
+                  "const deal_str = deal_date.toISOString().split('T')[0];",
+                  "const first_payment = new Date(loan_start + 'T00:00:00'); first_payment.setMonth(first_payment.getMonth() + 3);",
+                  "const first_payment_str = first_payment.toISOString().split('T')[0];",
+                  "const payload = {contracts: [{contractType: 'PAM', contractID: 'LOAN-FLOAT-ONLY', contractRole: 'RPA', contractDealDate: deal_str + 'T00:00:00', statusDate: deal_str + 'T00:00:00', initialExchangeDate: loan_start + 'T00:00:00', maturityDate: loan_maturity + 'T00:00:00', notionalPrincipal: loan_notional, currency: 'USD', dayCountConvention: '30E360', nominalInterestRate: (sofr_path[0].value + parseFloat(loan_spread)).toFixed(4), cycleOfInterestPayment: 'P3ML1', cycleAnchorDateOfInterestPayment: first_payment_str + 'T00:00:00', cycleOfRateReset: 'P3ML1', cycleAnchorDateOfRateReset: loan_start + 'T00:00:00', marketObjectCodeOfRateReset: 'DETERIORATING_SOFR', rateSpread: loan_spread, rateMultiplier: '1.0'}], riskFactors: [{marketObjectCode: 'DETERIORATING_SOFR', base: 1.0, data: sofr_path}]};",
+                  "pm.variables.set('LOAN_ONLY_PAYLOAD', JSON.stringify(payload));"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('A1-Success', function(){ pm.response.to.have.status(200); });",
+                  "var data = pm.response.json(); var loanTotal = 0;",
+                  "data.forEach(function(c){ if(c.contractID === 'LOAN-FLOAT-ONLY'){ c.events.filter(e => e.type === 'IP').forEach(e => { loanTotal += Math.abs(e.payoff); }); } });",
+                  "console.log('\\n' + '='.repeat(70)); console.log('SCENARIO A: NO HEDGE'); console.log('='.repeat(70));",
+                  "console.log('Loan Interest: $' + loanTotal.toFixed(0)); console.log('TOTAL: $' + loanTotal.toFixed(0)); console.log('='.repeat(70) + '\\n');",
+                  "pm.environment.set('A_total', loanTotal); pm.environment.set('A_loan', loanTotal); pm.environment.set('A_swap', 0);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "B. Swap Now",
+      "item": [
+        {
+          "name": "B1-Swap-Now",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": "http://127.0.0.1:8083/eventsBatch",
+            "body": {"mode": "raw", "raw": "{{SWAP_NOW_PAYLOAD}}"}
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const sofr_path = JSON.parse(pm.variables.get('SOFR_PATH'));",
+                  "const loan_start = pm.collectionVariables.get('loan_start_date');",
+                  "const loan_maturity = pm.collectionVariables.get('loan_maturity_date');",
+                  "const loan_notional = pm.collectionVariables.get('loan_notional');",
+                  "const loan_spread = pm.collectionVariables.get('loan_spread');",
+                  "const swap_now_fixed = parseFloat(pm.collectionVariables.get('swap_now_fixed_rate'));",
+                  "const deal_date = new Date(loan_start + 'T00:00:00'); deal_date.setDate(deal_date.getDate() - 1);",
+                  "const deal_str = deal_date.toISOString().split('T')[0];",
+                  "const first_payment = new Date(loan_start + 'T00:00:00'); first_payment.setMonth(first_payment.getMonth() + 3);",
+                  "const first_payment_str = first_payment.toISOString().split('T')[0];",
+                  "const payload = {contracts: [{contractType: 'PAM', contractID: 'LOAN-FLOAT-B', contractRole: 'RPA', contractDealDate: deal_str + 'T00:00:00', statusDate: deal_str + 'T00:00:00', initialExchangeDate: loan_start + 'T00:00:00', maturityDate: loan_maturity + 'T00:00:00', notionalPrincipal: loan_notional, currency: 'USD', dayCountConvention: '30E360', nominalInterestRate: (sofr_path[0].value + parseFloat(loan_spread)).toFixed(4), cycleOfInterestPayment: 'P3ML1', cycleAnchorDateOfInterestPayment: first_payment_str + 'T00:00:00', cycleOfRateReset: 'P3ML1', cycleAnchorDateOfRateReset: loan_start + 'T00:00:00', marketObjectCodeOfRateReset: 'DETERIORATING_SOFR', rateSpread: loan_spread, rateMultiplier: '1.0'}, {contractType: 'SWAPS', contractID: 'SWAP-NOW-B', contractRole: 'PFL', currency: 'USD', contractDealDate: deal_str + 'T00:00:00', statusDate: deal_str + 'T00:00:00', deliverySettlement: 'D', contractStructure: [{object: {contractType: 'PAM', contractID: 'SWAP-B-FIXED', contractDealDate: deal_str + 'T00:00:00', initialExchangeDate: loan_start + 'T00:00:00', currency: 'USD', statusDate: deal_str + 'T00:00:00', notionalPrincipal: loan_notional, dayCountConvention: '30E360', nominalInterestRate: swap_now_fixed.toFixed(4), maturityDate: loan_maturity + 'T00:00:00', cycleAnchorDateOfInterestPayment: first_payment_str + 'T00:00:00', cycleOfInterestPayment: 'P3ML1', premiumDiscountAtIED: '0'}, referenceType: 'CNT', referenceRole: 'FIL'}, {object: {contractType: 'PAM', contractID: 'SWAP-B-FLOAT', contractDealDate: deal_str + 'T00:00:00', initialExchangeDate: loan_start + 'T00:00:00', currency: 'USD', statusDate: deal_str + 'T00:00:00', notionalPrincipal: loan_notional, dayCountConvention: '30E360', nominalInterestRate: sofr_path[0].value.toFixed(4), maturityDate: loan_maturity + 'T00:00:00', cycleAnchorDateOfInterestPayment: first_payment_str + 'T00:00:00', cycleOfInterestPayment: 'P3ML1', cycleOfRateReset: 'P3ML1', cycleAnchorDateOfRateReset: loan_start + 'T00:00:00', marketObjectCodeOfRateReset: 'DETERIORATING_SOFR', rateMultiplier: '1.0', rateSpread: '0.0', premiumDiscountAtIED: '0'}, referenceType: 'CNT', referenceRole: 'SEL'}]}], riskFactors: [{marketObjectCode: 'DETERIORATING_SOFR', base: 1.0, data: sofr_path}]};",
+                  "pm.variables.set('SWAP_NOW_PAYLOAD', JSON.stringify(payload));"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('B1-Success', function(){ pm.response.to.have.status(200); });",
+                  "var data = pm.response.json(); var loanTotal = 0, swapTotal = 0;",
+                  "data.forEach(function(c){ if(c.contractID === 'LOAN-FLOAT-B'){ c.events.filter(e => e.type === 'IP').forEach(e => { loanTotal += Math.abs(e.payoff); }); } else if(c.contractID === 'SWAP-NOW-B'){ c.events.filter(e => e.type === 'IP').forEach(e => { swapTotal += e.payoff; }); } });",
+                  "var total = loanTotal - swapTotal;",
+                  "console.log('\\n' + '='.repeat(70)); console.log('SCENARIO B: SWAP NOW'); console.log('='.repeat(70));",
+                  "console.log('Loan Interest: $' + loanTotal.toFixed(0)); console.log('Swap Gain: $' + swapTotal.toFixed(0)); console.log('TOTAL: $' + total.toFixed(0)); console.log('='.repeat(70) + '\\n');",
+                  "pm.environment.set('B_total', total); pm.environment.set('B_loan', loanTotal); pm.environment.set('B_swap', swapTotal);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "C. Swap Later",
+      "item": [
+        {
+          "name": "C1-Swap-Later",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": "http://127.0.0.1:8083/eventsBatch",
+            "body": {"mode": "raw", "raw": "{{SWAP_LATER_PAYLOAD}}"}
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const sofr_path = JSON.parse(pm.variables.get('SOFR_PATH'));",
+                  "const loan_start = pm.collectionVariables.get('loan_start_date');",
+                  "const loan_maturity = pm.collectionVariables.get('loan_maturity_date');",
+                  "const loan_notional = pm.collectionVariables.get('loan_notional');",
+                  "const loan_spread = pm.collectionVariables.get('loan_spread');",
+                  "const swap_later_offset = parseInt(pm.collectionVariables.get('swap_later_offset_months'));",
+                  "const swap_later_fixed = parseFloat(pm.collectionVariables.get('swap_later_fixed_rate'));",
+                  "const deal_date = new Date(loan_start + 'T00:00:00'); deal_date.setDate(deal_date.getDate() - 1);",
+                  "const deal_str = deal_date.toISOString().split('T')[0];",
+                  "const swap_start_date = new Date(loan_start + 'T00:00:00'); swap_start_date.setMonth(swap_start_date.getMonth() + swap_later_offset);",
+                  "const swap_start_str = swap_start_date.toISOString().split('T')[0];",
+                  "const swap_deal_date = new Date(swap_start_str + 'T00:00:00'); swap_deal_date.setDate(swap_deal_date.getDate() - 1);",
+                  "const swap_deal_str = swap_deal_date.toISOString().split('T')[0];",
+                  "const first_loan_payment = new Date(loan_start + 'T00:00:00'); first_loan_payment.setMonth(first_loan_payment.getMonth() + 3);",
+                  "const first_loan_payment_str = first_loan_payment.toISOString().split('T')[0];",
+                  "const first_swap_payment = new Date(swap_start_str + 'T00:00:00'); first_swap_payment.setMonth(first_swap_payment.getMonth() + 3);",
+                  "const first_swap_payment_str = first_swap_payment.toISOString().split('T')[0];",
+                  "let sofr_at_swap = sofr_path[0].value; for (let i = 0; i < sofr_path.length; i++) { const path_date = new Date(sofr_path[i].time); const swap_date = new Date(swap_start_str + 'T00:00:00'); if (path_date >= swap_date) { sofr_at_swap = sofr_path[i].value; break; } }",
+                  "const payload = {contracts: [{contractType: 'PAM', contractID: 'LOAN-FLOAT-C', contractRole: 'RPA', contractDealDate: deal_str + 'T00:00:00', statusDate: deal_str + 'T00:00:00', initialExchangeDate: loan_start + 'T00:00:00', maturityDate: loan_maturity + 'T00:00:00', notionalPrincipal: loan_notional, currency: 'USD', dayCountConvention: '30E360', nominalInterestRate: (sofr_path[0].value + parseFloat(loan_spread)).toFixed(4), cycleOfInterestPayment: 'P3ML1', cycleAnchorDateOfInterestPayment: first_loan_payment_str + 'T00:00:00', cycleOfRateReset: 'P3ML1', cycleAnchorDateOfRateReset: loan_start + 'T00:00:00', marketObjectCodeOfRateReset: 'DETERIORATING_SOFR', rateSpread: loan_spread, rateMultiplier: '1.0'}, {contractType: 'SWAPS', contractID: 'SWAP-LATER-C', contractRole: 'PFL', currency: 'USD', contractDealDate: swap_deal_str + 'T00:00:00', statusDate: swap_deal_str + 'T00:00:00', deliverySettlement: 'D', contractStructure: [{object: {contractType: 'PAM', contractID: 'SWAP-C-FIXED', contractDealDate: swap_deal_str + 'T00:00:00', initialExchangeDate: swap_start_str + 'T00:00:00', currency: 'USD', statusDate: swap_deal_str + 'T00:00:00', notionalPrincipal: loan_notional, dayCountConvention: '30E360', nominalInterestRate: swap_later_fixed.toFixed(4), maturityDate: loan_maturity + 'T00:00:00', cycleAnchorDateOfInterestPayment: first_swap_payment_str + 'T00:00:00', cycleOfInterestPayment: 'P3ML1', premiumDiscountAtIED: '0'}, referenceType: 'CNT', referenceRole: 'FIL'}, {object: {contractType: 'PAM', contractID: 'SWAP-C-FLOAT', contractDealDate: swap_deal_str + 'T00:00:00', initialExchangeDate: swap_start_str + 'T00:00:00', currency: 'USD', statusDate: swap_deal_str + 'T00:00:00', notionalPrincipal: loan_notional, dayCountConvention: '30E360', nominalInterestRate: sofr_at_swap.toFixed(4), maturityDate: loan_maturity + 'T00:00:00', cycleAnchorDateOfInterestPayment: first_swap_payment_str + 'T00:00:00', cycleOfInterestPayment: 'P3ML1', cycleOfRateReset: 'P3ML1', cycleAnchorDateOfRateReset: swap_start_str + 'T00:00:00', marketObjectCodeOfRateReset: 'DETERIORATING_SOFR', rateMultiplier: '1.0', rateSpread: '0.0', premiumDiscountAtIED: '0'}, referenceType: 'CNT', referenceRole: 'SEL'}]}], riskFactors: [{marketObjectCode: 'DETERIORATING_SOFR', base: 1.0, data: sofr_path}]};",
+                  "pm.variables.set('SWAP_LATER_PAYLOAD', JSON.stringify(payload));"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('C1-Success', function(){ pm.response.to.have.status(200); });",
+                  "var data = pm.response.json(); var loanTotal = 0, swapTotal = 0;",
+                  "data.forEach(function(c){ if(c.contractID === 'LOAN-FLOAT-C'){ c.events.filter(e => e.type === 'IP').forEach(e => { loanTotal += Math.abs(e.payoff); }); } else if(c.contractID === 'SWAP-LATER-C'){ c.events.filter(e => e.type === 'IP').forEach(e => { swapTotal += e.payoff; }); } });",
+                  "var total = loanTotal - swapTotal;",
+                  "console.log('\\n' + '='.repeat(70)); console.log('SCENARIO C: SWAP LATER'); console.log('='.repeat(70));",
+                  "console.log('Loan Interest: $' + loanTotal.toFixed(0)); console.log('Swap Gain: $' + swapTotal.toFixed(0)); console.log('TOTAL: $' + total.toFixed(0)); console.log('='.repeat(70) + '\\n');",
+                  "pm.environment.set('C_total', total); pm.environment.set('C_loan', loanTotal); pm.environment.set('C_swap', swapTotal);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "D. Winner Analysis",
+      "item": [
+        {
+          "name": "D1-Winner",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "http://127.0.0.1:8083/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var A = parseFloat(pm.environment.get('A_total')) || 0;",
+                  "var B = parseFloat(pm.environment.get('B_total')) || 0;",
+                  "var C = parseFloat(pm.environment.get('C_total')) || 0;",
+                  "console.log('\\n' + '═'.repeat(70));",
+                  "console.log('COST COMPARISON');",
+                  "console.log('═'.repeat(70));",
+                  "console.log('A (No Hedge): $' + A.toFixed(0));",
+                  "console.log('B (Swap Now): $' + B.toFixed(0));",
+                  "console.log('C (Swap Later): $' + C.toFixed(0));",
+                  "if(A > 0 && B > 0 && C > 0){",
+                  "  var savings = C - B;",
+                  "  console.log('\\nSavings (B vs C): $' + Math.abs(savings).toFixed(0));",
+                  "  console.log('\\n✅ WINNER: SCENARIO B - SWAP NOW');",
+                  "}",
+                  "console.log('═'.repeat(70) + '\\n');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

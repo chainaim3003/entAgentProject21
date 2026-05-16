@@ -93,6 +93,31 @@ export function ResultsPanel({ trace, done, history, historyError }: Props) {
             <span className="running-dot" />
             Running… {trace.length} of 8 agents complete
           </div>
+          {/* Show latest node + summary so user sees WHERE the pipeline is */}
+          {trace.length > 0 && (
+            <div className="running-detail">
+              <div className="running-detail-label">Current node:</div>
+              <div className="running-detail-node">
+                <code>{trace[trace.length - 1].node}</code>
+              </div>
+              <div className="running-detail-summary">
+                {trace[trace.length - 1].summary}
+              </div>
+            </div>
+          )}
+          {/* Show recent audit log entries (last 3) for visibility */}
+          {trace.length > 1 && (
+            <details className="running-recent">
+              <summary>Recent steps ({trace.length})</summary>
+              <ul className="running-recent-list">
+                {trace.slice(-5).reverse().map((entry, i) => (
+                  <li key={i}>
+                    <code>{entry.node}</code>: {entry.summary}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </div>
       )}
 
@@ -113,6 +138,19 @@ export function ResultsPanel({ trace, done, history, historyError }: Props) {
                   <li key={i}>{e}</li>
                 ))}
               </ul>
+            )}
+            {/* Show recent audit trail so user sees full pipeline path */}
+            {trace.length > 0 && (
+              <details className="failure-card-trace">
+                <summary>Pipeline trace ({trace.length} steps)</summary>
+                <ul className="failure-card-trace-list">
+                  {trace.map((entry, i) => (
+                    <li key={i}>
+                      <code>{entry.node}</code>: {entry.summary}
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
             <p className="failure-card-hint">
               The system never fabricates a result when inputs are bad. Fix the issue and resubmit.
