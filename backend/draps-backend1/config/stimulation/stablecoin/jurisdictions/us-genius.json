@@ -1,0 +1,18 @@
+{
+  "jurisdiction_code": "US-GENIUS",
+  "jurisdiction_name": "United States - GENIUS Act Framework",
+  "effective_date": "2026-01-01",
+  "description": "Extracted from Stables-HT-ISS-time-daily-5.json current hardcoded values",
+  
+  "backing_threshold": 1.0,
+  "liquidity_threshold": 0.2,
+  "wam_max_days": 93.0,
+  "hqla_min_score": 100.0,
+  "attestation_max_days": 30.0,
+  "max_single_asset_share": 0.4,
+  "hhi_warning_threshold": 0.35,
+  "bank_stress_threshold": 0.5,
+  "base_quality": 100.0,
+  "quality_floor": 50.0,
+  "sovereign_max_degradation": 0.3
+}

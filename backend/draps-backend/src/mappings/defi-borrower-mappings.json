@@ -1,0 +1,70 @@
+{
+  "_comment": "JSONPath mappings for DeFi borrower collection — maps config values to collection request body fields. Parallel to issuer-mappings.json.",
+
+  "protocol_data.health_factor_trigger": [
+    "$.item[?(@.name=~/addHealthFactorModel/i)].request.body.raw~.liquidationThreshold",
+    "$.item[?(@.name=~/addCollateralVelocityModel/i)].request.body.raw~.liquidationThreshold"
+  ],
+
+  "protocol_data.healthy_health_factor": [
+    "$.item[?(@.name=~/addHealthFactorModel/i)].request.body.raw~.healthyThreshold",
+    "$.item[?(@.name=~/addCollateralVelocityModel/i)].request.body.raw~.healthyThreshold"
+  ],
+
+  "protocol_data.target_health_factor_recovery": [
+    "$.item[?(@.name=~/addHealthFactorModel/i)].request.body.raw~.targetHF",
+    "$.item[?(@.name=~/addCollateralVelocityModel/i)].request.body.raw~.targetHF"
+  ],
+
+  "protocol_data.loan_to_value": [
+    "$.item[?(@.name=~/addHealthFactorModel/i)].request.body.raw~.maxLTV"
+  ],
+
+  "protocol_data.liquidation_bonus": [
+    "$.item[?(@.name=~/addHealthFactorModel/i)].request.body.raw~.liquidationBonus"
+  ],
+
+  "protocol_data.liquidation_close_factor": [
+    "$.item[?(@.name=~/addHealthFactorModel/i)].request.body.raw~.closeFactor"
+  ],
+
+  "protocol_data.cascade_risk.hhi_warning_threshold": [
+    "$.item[?(@.name=~/addCascadeProbabilityModel/i)].request.body.raw~.hhiWarningThreshold"
+  ],
+
+  "protocol_data.cascade_risk.max_single_collateral_share": [
+    "$.item[?(@.name=~/addCollateralRebalancingModel/i)].request.body.raw~.maxSingleCollateralShare"
+  ],
+
+  "protocol_data.cascade_risk.correlation_penalty_threshold": [
+    "$.item[?(@.name=~/addCorrelationRiskModel/i)].request.body.raw~.correlationPenaltyThreshold"
+  ],
+
+  "protocol_data.gas_parameters.base_fee_gwei_reference": [
+    "$.item[?(@.name=~/addGasOptimizationModel/i)].request.body.raw~.baseGasPriceGwei"
+  ],
+
+  "borrower_thresholds.repay_trigger_health_factor": [
+    "$.item[?(@.name=~/addCollateralVelocityModel/i)].request.body.raw~.repayTriggerHF"
+  ],
+
+  "borrower_thresholds.aggressive_repay_fraction": [
+    "$.item[?(@.name=~/addCollateralVelocityModel/i)].request.body.raw~.aggressiveRepayFraction"
+  ],
+
+  "borrower_thresholds.moderate_repay_fraction": [
+    "$.item[?(@.name=~/addCollateralVelocityModel/i)].request.body.raw~.moderateRepayFraction"
+  ],
+
+  "borrower_thresholds.safe_horizon_days": [
+    "$.item[?(@.name=~/addCollateralVelocityModel/i)].request.body.raw~.safeHorizonDays"
+  ],
+
+  "borrower_thresholds.urgent_days": [
+    "$.item[?(@.name=~/addCollateralVelocityModel/i)].request.body.raw~.urgentDays"
+  ],
+
+  "generated.monitoring_times": [
+    "$.item[?(@.request.body.raw~.monitoringEventTimes)].request.body.raw~.monitoringEventTimes"
+  ]
+}

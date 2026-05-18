@@ -1,0 +1,44 @@
+{
+  "_comment": "JSONPath mappings for DeFi protocol collection — maps protocol-level config values to collection fields. Parallel to holder-mappings.json.",
+
+  "protocol_thresholds.min_health_factor_trigger": [
+    "$.item[?(@.name=~/addHealthFactorModel/i)].request.body.raw~.liquidationThreshold",
+    "$.item[?(@.name=~/addCascadeProbabilityModel/i)].request.body.raw~.liquidationTrigger"
+  ],
+
+  "protocol_thresholds.healthy_health_factor": [
+    "$.item[?(@.name=~/addHealthFactorModel/i)].request.body.raw~.healthyThreshold"
+  ],
+
+  "protocol_thresholds.target_health_factor": [
+    "$.item[?(@.name=~/addHealthFactorModel/i)].request.body.raw~.targetHF"
+  ],
+
+  "protocol_thresholds.max_liquidation_bonus": [
+    "$.item[?(@.name=~/addHealthFactorModel/i)].request.body.raw~.liquidationBonus"
+  ],
+
+  "protocol_thresholds.liquidation_close_factor": [
+    "$.item[?(@.name=~/addHealthFactorModel/i)].request.body.raw~.closeFactor"
+  ],
+
+  "protocol_thresholds.max_cascade_depth": [
+    "$.item[?(@.name=~/addCascadeProbabilityModel/i)].request.body.raw~.maxCascadeDepth"
+  ],
+
+  "protocol_thresholds.gas_price_gwei_limit": [
+    "$.item[?(@.name=~/addGasOptimizationModel/i)].request.body.raw~.gasPriceLimitGwei"
+  ],
+
+  "protocol_thresholds.max_slippage_tolerance": [
+    "$.item[?(@.name=~/addCollateralRebalancingModel/i)].request.body.raw~.maxSlippage"
+  ],
+
+  "protocol_thresholds.circuit_breaker_active": [
+    "$.item[?(@.name=~/addCascadeProbabilityModel/i)].request.body.raw~.circuitBreakerActive"
+  ],
+
+  "generated.monitoring_times": [
+    "$.item[?(@.request.body.raw~.monitoringEventTimes)].request.body.raw~.monitoringEventTimes"
+  ]
+}

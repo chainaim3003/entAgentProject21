@@ -1,0 +1,52 @@
+{
+  "comment": "JSONPath mappings for issuer collection - maps config values to collection fields",
+  
+  "jurisdiction.backing_threshold": [
+    "$.item[?(@.name=='addBackingRatioModel')].request.body.raw~.backingThreshold",
+    "$.item[?(@.name=='addComplianceDriftModel')].request.body.raw~.backingThreshold"
+  ],
+  
+  "jurisdiction.liquidity_threshold": [
+    "$.item[?(@.name=='addBackingRatioModel')].request.body.raw~.liquidityThreshold"
+  ],
+  
+  "jurisdiction.wam_max_days": [
+    "$.item[?(@.name=='addComplianceDriftModel')].request.body.raw~.wamMaxDays"
+  ],
+  
+  "jurisdiction.hqla_min_score": [
+    "$.item[?(@.name=='addComplianceDriftModel')].request.body.raw~.hqlaMinScore"
+  ],
+  
+  "jurisdiction.attestation_max_days": [
+    "$.item[?(@.name=='addComplianceDriftModel')].request.body.raw~.attestationMaxDays"
+  ],
+  
+  "jurisdiction.max_single_asset_share": [
+    "$.item[?(@.name=='addConcentrationDriftModel')].request.body.raw~.maxSingleAssetShare"
+  ],
+  
+  "jurisdiction.hhi_warning_threshold": [
+    "$.item[?(@.name=='addConcentrationDriftModel')].request.body.raw~.hhiWarningThreshold"
+  ],
+  
+  "jurisdiction.bank_stress_threshold": [
+    "$.item[?(@.name=='addAssetQualityModel')].request.body.raw~.bankStressThreshold"
+  ],
+  
+  "jurisdiction.base_quality": [
+    "$.item[?(@.name=='addAssetQualityModel')].request.body.raw~.baseQuality"
+  ],
+  
+  "jurisdiction.quality_floor": [
+    "$.item[?(@.name=='addAssetQualityModel')].request.body.raw~.qualityFloor"
+  ],
+  
+  "jurisdiction.sovereign_max_degradation": [
+    "$.item[?(@.name=='addAssetQualityModel')].request.body.raw~.sovereignMaxDegradation"
+  ],
+  
+  "generated.monitoring_times": [
+    "$.item[?(@.request.body.raw~.monitoringEventTimes)].request.body.raw~.monitoringEventTimes"
+  ]
+}

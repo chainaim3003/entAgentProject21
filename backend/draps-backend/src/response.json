@@ -1,0 +1,1941 @@
+{
+    "success": true,
+    "scenarioName": "Stables-HT-ISS-HOL-time-daily-1-fix1",
+    "description": "STABLECOIN4: Extended to 45 days. Requires Java Option B (maturityDate filter).\nmaturityDate filter is a NO-OP for ISS-HOL (all monitoring times within contract lifecycle).\n\nHOLDER PERSPECTIVE fix2: DERIVED PORTFOLIO INDEXES\n═══════════════════════════════════════════════════\n\nFIX vs fix1:\n  fix1: SC_CASH_RESERVE and SC_TOTAL_RESERVES were HARDCODED Reference Indexes\n        with manually pre-computed 31-point timeseries.\n  fix2: Phase 0 runs 5 asset contracts through ACTUS FIRST, captures MD events,\n        DERIVES cash timeline (initial + T-bill maturity proceeds) and\n        reserves timeline (cash + surviving T-bill MtM via linear accretion).\n        Then registers DERIVED data as Reference Indexes.\n\nMARKET DATA (correctly hardcoded — external signals):\n  STABLECOIN_PEG_DEV, PEG_RISK_SCORE, SC_CURVE_IMBALANCE,\n  SC_ORDERBOOK_DECLINE, SC_CEX_OUTFLOW_MULT, SC_SENTIMENT_ZSCORE\n\nPATTERN: Proven in Approach2-SequentialFeedback-fix2 (stablecoin2)\n\n4 BEHAVIORAL MODELS x 31 DAILY EPOCHS = 124 PP EVENTS\n6 PAM CONTRACTS (5 assets + 1 liability)\nZERO CODE CHANGES. Collection JSON only.\n\nOpen Postman Console (Ctrl+Alt+C) before running.\n\nMARKET DATA NORMALIZATION & CALIBRATION\n════════════════════════════════════════\n\nBANK_STRESS_INDEX [0,1]:\n  Source: OFR Financial Stress Index (33 daily variables)\n  URL: https://www.financialresearch.gov/financial-stress-index/\n  Normalization: clamp((OFR_FSI + 2) / 12, 0, 1)\n    0.0 = calm (OFR -2), 0.17 = normal (OFR 0), 0.50 = severe (OFR +4)\n  Sim baseline: 0.10 ≈ OFR -0.8 (normal)\n  Sim peak: 0.55 ≈ OFR +4.6 (moderate-severe, between SVB and COVID)\n  Threshold 0.5: quality degrades above OFR +4.0 (severe banking stress)\n  Alt sources: STLFSI4 (FRED), KCFSI (Kansas City Fed)\n\nUS_SOVEREIGN_STRESS [0,1]:\n  Source: US 5-Year CDS Spread (Bloomberg/ICE/Markit)\n  Normalization: clamp(CDS_bps / 200, 0, 1)\n    0.0 = 0bps, 0.15 = 30bps (normal), 0.50 = 100bps, 0.875 = 175bps\n  Sim peak: 0.14 ≈ 28bps (normal-range sovereign, bank-driven crisis scenario)\n  Narrative: banks are failing but U.S. government itself is fine\n  Alt source: MOVE Index (ICE/BofA bond volatility)\n\nSTABLECOIN_PEG_DEV [0,1]:\n  Source: DEX TWAP / Chainlink Price Feed / CoinGecko\n  Direct observation: |market_price - $1.00|\n  Sim peak: 0.042 = 4.2% deviation (moderate, 74th percentile of 609 events)\n  Calibration: Lyons & Viswanath-Natraj (2023), 609 de-peg events\n    Minor 1-3%: 412 events (68%), Moderate 3-10%: 156 events (26%)\n    Severe 10-25%: 31 events (5%), Catastrophic >25%: 10 events (1.6%)\n\nPEG_RISK_SCORE [0-100]:\n  Composite: weighted sum of peg deviation, EW signals, market microstructure\n  Sim peak: 48 (Mar 12) — high stress, triggers EMERGENCY_LIQUIDATION at ≥45\n\nEARLY WARNING SIGNALS (4 validated signals from 609-event dataset):\n  SC_CURVE_IMBALANCE [0,1]: DEX pool ratio. Threshold >0.15. F1=0.80, lead=4.2h\n  SC_ORDERBOOK_DECLINE [0,1]: CEX depth. Threshold >0.40. F1=0.70, lead=2.1h\n  SC_CEX_OUTFLOW_MULT [1,∞): Exchange outflows vs baseline. Threshold >3x. F1=0.69, lead=6.8h\n  SC_SENTIMENT_ZSCORE [-∞,+∞]: NLP z-score. Threshold <-2.0. F1=0.63, lead=8.4h\n\nREGULATORY THRESHOLDS:\n  backingThreshold=1.0:       GENIUS Act §4(a)(1), STABLE Act §3\n  liquidityThreshold=0.2:     Basel III LCR adapted (note: MiCA Art.54 uses 0.30)\n  wamMaxDays=93:              GENIUS Act §4(a)(1)(A)(iii)\n  hqlaMinScore=100:           GENIUS Act permitted assets (all L1 HQLA)\n  qualityFloor=50:            Basel III HQLA L2B classification\n  attestationMaxDays=30:      MiCA Art.54 monthly attestation cycle\n  maxSingleAssetShare=0.40:   Prudential concentration (SVB lesson)\n  hhiWarningThreshold=0.35:   Adapted from DoJ/FTC HHI guidelines (>0.25=concentrated)\n  bankStressThreshold=0.5:    ≈ OFR FSI +4.0 (COVID-level banking stress)\n  pegDeviationThreshold=0.005: Lower bound of minor de-peg events (609-event dataset)\n  sovereignMaxDegradation=0.30: Cap on sovereign-driven quality loss (T-bills remain L2B minimum)\n\nRESEARCH REFERENCES:\n  Lyons & Viswanath-Natraj (2023): 609 de-peg event redemption curves\n  Fed FEDS Notes Dec 2025: \"In the Shadow of Bank Runs\" (SVB/USDC analysis)\n  BIS Working Paper 1164: \"Public Information and Stablecoin Runs\"\n  OFR Working Paper (2019): \"The OFR Financial Stress Index\"\n  Sanhaji (2024): \"Collapse of SVB and USDC Depegging\" (MDPI FinTech)\n  GENIUS Act S.919: §4(a)(1) reserve requirements\n  MiCA Regulation (EU) 2023/1114: Art.54 EMT requirements\n  Basel III LCR: HQLA classification (L1/L2A/L2B)\n\nFIX1 (2026-03-10): VERIFIED CLEAN — no /behaviorStateAt calls.\n  This collection uses rf2/scenarioSimulation on 8083 which internally\n  activates the scenario via /scenarioSimulationStart. No change needed.",
+    "environment": "localhost",
+    "riskServiceUrl": "http://localhost:8082",
+    "actusServerUrl": "http://localhost:8083",
+    "steps": [
+        {
+            "step": 1,
+            "name": "0.1 Minimal RI for asset-only scenario",
+            "method": "POST",
+            "url": "http://localhost:8082/addReferenceIndex",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 1319
+        },
+        {
+            "step": 2,
+            "name": "0.2 Asset-only scenario",
+            "method": "POST",
+            "url": "http://localhost:8082/addScenario",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 59
+        },
+        {
+            "step": 3,
+            "name": "0.3 Run 5 asset contracts — capture events & derive indexes",
+            "method": "POST",
+            "url": "http://localhost:8083/rf2/scenarioSimulation",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 957
+        },
+        {
+            "step": 4,
+            "name": "1A.1 Register DERIVED indexes + STABLECOIN_PEG_DEV",
+            "method": "POST",
+            "url": "http://localhost:8082/addReferenceIndex",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 144
+        },
+        {
+            "step": 5,
+            "name": "1B.1 PEG_RISK_SCORE",
+            "method": "POST",
+            "url": "http://localhost:8082/addReferenceIndex",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 40
+        },
+        {
+            "step": 6,
+            "name": "1B.2 SC_CURVE_IMBALANCE",
+            "method": "POST",
+            "url": "http://localhost:8082/addReferenceIndex",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 50
+        },
+        {
+            "step": 7,
+            "name": "1B.3 SC_ORDERBOOK_DECLINE",
+            "method": "POST",
+            "url": "http://localhost:8082/addReferenceIndex",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 62
+        },
+        {
+            "step": 8,
+            "name": "1B.4 SC_CEX_OUTFLOW_MULT",
+            "method": "POST",
+            "url": "http://localhost:8082/addReferenceIndex",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 143
+        },
+        {
+            "step": 9,
+            "name": "1B.5 SC_SENTIMENT_ZSCORE",
+            "method": "POST",
+            "url": "http://localhost:8082/addReferenceIndex",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 61
+        },
+        {
+            "step": 10,
+            "name": "2.1 RedemptionPressureModel",
+            "method": "POST",
+            "url": "http://localhost:8082/addRedemptionPressureModel",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 118
+        },
+        {
+            "step": 11,
+            "name": "2.2 EarlyWarningModel",
+            "method": "POST",
+            "url": "http://localhost:8082/addEarlyWarningModel",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 181
+        },
+        {
+            "step": 12,
+            "name": "2.3 BackingRatioModel",
+            "method": "POST",
+            "url": "http://localhost:8082/addBackingRatioModel",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 118
+        },
+        {
+            "step": 13,
+            "name": "2.4 MaturityLadderModel",
+            "method": "POST",
+            "url": "http://localhost:8082/addMaturityLadderModel",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 100
+        },
+        {
+            "step": 14,
+            "name": "3.1 HOL Scenario",
+            "method": "POST",
+            "url": "http://localhost:8082/addScenario",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 141
+        },
+        {
+            "step": 15,
+            "name": "4.1 Verify RedemptionPressureModel",
+            "method": "GET",
+            "url": "http://localhost:8082/findRedemptionPressureModel/rp_hol_01",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 122
+        },
+        {
+            "step": 16,
+            "name": "4.2 Verify EarlyWarningModel",
+            "method": "GET",
+            "url": "http://localhost:8082/findEarlyWarningModel/ew_hol_01",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 62
+        },
+        {
+            "step": 17,
+            "name": "4.3 Verify BackingRatioModel",
+            "method": "GET",
+            "url": "http://localhost:8082/findBackingRatioModel/br_hol_01",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 60
+        },
+        {
+            "step": 18,
+            "name": "4.4 Verify MaturityLadderModel",
+            "method": "GET",
+            "url": "http://localhost:8082/findMaturityLadderModel/ml_hol_01",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 59
+        },
+        {
+            "step": 19,
+            "name": "4.5 Verify Scenario",
+            "method": "GET",
+            "url": "http://localhost:8082/findScenario/sc_hol_ht_daily_01",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 32
+        },
+        {
+            "step": 20,
+            "name": "5.1 Run HOL Simulation (6 contracts, 31 daily epochs, 4 models)",
+            "method": "POST",
+            "url": "http://localhost:8083/rf2/scenarioSimulation",
+            "status": "success",
+            "httpStatus": 200,
+            "durationMs": 10973
+        }
+    ],
+    "simulation": [
+        {
+            "scenarioId": "sc_hol_ht_daily_01",
+            "contractID": "HOL-CashReserve-001",
+            "status": "Success",
+            "message": "",
+            "events": [
+                {
+                    "type": "IP",
+                    "time": "2026-04-14T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 5000,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "MD",
+                    "time": "2026-04-14T00:00",
+                    "payoff": 5000,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                }
+            ]
+        },
+        {
+            "scenarioId": "sc_hol_ht_daily_01",
+            "contractID": "HOL-TBill-4W-001",
+            "status": "Success",
+            "message": "",
+            "events": [
+                {
+                    "type": "IP",
+                    "time": "2026-03-15T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 25000,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "MD",
+                    "time": "2026-03-15T00:00",
+                    "payoff": 25000,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                }
+            ]
+        },
+        {
+            "scenarioId": "sc_hol_ht_daily_01",
+            "contractID": "HOL-TBill-8W-001",
+            "status": "Success",
+            "message": "",
+            "events": [
+                {
+                    "type": "IP",
+                    "time": "2026-03-30T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 25000,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "MD",
+                    "time": "2026-03-30T00:00",
+                    "payoff": 25000,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                }
+            ]
+        },
+        {
+            "scenarioId": "sc_hol_ht_daily_01",
+            "contractID": "HOL-TBill-13W-001",
+            "status": "Success",
+            "message": "",
+            "events": []
+        },
+        {
+            "scenarioId": "sc_hol_ht_daily_01",
+            "contractID": "HOL-TBill-26W-001",
+            "status": "Success",
+            "message": "",
+            "events": []
+        },
+        {
+            "scenarioId": "sc_hol_ht_daily_01",
+            "contractID": "HOL-StableCoin-Liability",
+            "status": "Success",
+            "message": "",
+            "events": [
+                {
+                    "type": "PP",
+                    "time": "2026-03-01T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-01T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-01T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-01T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "IED",
+                    "time": "2026-03-01T00:00",
+                    "payoff": -100000,
+                    "currency": "USD",
+                    "nominalValue": 100000,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-02T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 100000,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-02T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 100000,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-02T00:00",
+                    "payoff": 15000.000000000002,
+                    "currency": "USD",
+                    "nominalValue": 85000,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-02T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 85000,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-03T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 85000,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-03T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 85000,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-03T00:00",
+                    "payoff": 12000,
+                    "currency": "USD",
+                    "nominalValue": 73000,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-03T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 73000,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-04T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 73000,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-04T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 73000,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-04T00:00",
+                    "payoff": 9600.000000000002,
+                    "currency": "USD",
+                    "nominalValue": 63400,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-04T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 63400,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-05T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 63400,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-05T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 63400,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-05T00:00",
+                    "payoff": 7680.000000000001,
+                    "currency": "USD",
+                    "nominalValue": 55720,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-05T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 55720,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-06T00:00",
+                    "payoff": 2039.352,
+                    "currency": "USD",
+                    "nominalValue": 53680.648,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-06T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 53680.648,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-06T00:00",
+                    "payoff": 5736.129600000001,
+                    "currency": "USD",
+                    "nominalValue": 47944.5184,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-06T00:00",
+                    "payoff": 11986.1296,
+                    "currency": "USD",
+                    "nominalValue": 35958.3888,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-07T00:00",
+                    "payoff": 2355.2744664,
+                    "currency": "USD",
+                    "nominalValue": 33603.1143336,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-07T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 33603.1143336,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-07T00:00",
+                    "payoff": 1720.6228667200012,
+                    "currency": "USD",
+                    "nominalValue": 31882.49146688,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-07T00:00",
+                    "payoff": 7970.62286672,
+                    "currency": "USD",
+                    "nominalValue": 23911.86860016,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-08T00:00",
+                    "payoff": 2379.23092571592,
+                    "currency": "USD",
+                    "nominalValue": 21532.63767444408,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-08T00:00",
+                    "payoff": 2153.263767444408,
+                    "currency": "USD",
+                    "nominalValue": 19379.37390699967,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-08T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 19379.37390699967,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-08T00:00",
+                    "payoff": 9689.686953499835,
+                    "currency": "USD",
+                    "nominalValue": 9689.686953499835,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-09T00:00",
+                    "payoff": 1293.573208292228,
+                    "currency": "USD",
+                    "nominalValue": 8396.113745207607,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-09T00:00",
+                    "payoff": 839.6113745207608,
+                    "currency": "USD",
+                    "nominalValue": 7556.502370686847,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-09T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 7556.502370686847,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-09T00:00",
+                    "payoff": 3778.2511853434235,
+                    "currency": "USD",
+                    "nominalValue": 3778.2511853434235,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-10T00:00",
+                    "payoff": 671.5841481947936,
+                    "currency": "USD",
+                    "nominalValue": 3106.66703714863,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-10T00:00",
+                    "payoff": 310.666703714863,
+                    "currency": "USD",
+                    "nominalValue": 2796.0003334337666,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-10T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 2796.0003334337666,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-10T00:00",
+                    "payoff": 1398.0001667168833,
+                    "currency": "USD",
+                    "nominalValue": 1398.0001667168833,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-11T00:00",
+                    "payoff": 298.4730355940545,
+                    "currency": "USD",
+                    "nominalValue": 1099.527131122829,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-11T00:00",
+                    "payoff": 329.85813933684864,
+                    "currency": "USD",
+                    "nominalValue": 769.6689917859803,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-11T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 769.6689917859803,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-11T00:00",
+                    "payoff": 769.6689917859803,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-12T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-12T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-12T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-12T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-13T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-13T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-13T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-13T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-14T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-14T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-14T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-14T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-15T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-15T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-15T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-15T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-16T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-16T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-16T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-16T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-17T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-17T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-17T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-17T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-18T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-18T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-18T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-18T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-19T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-19T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-19T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-19T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-20T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-20T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-20T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-20T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-21T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-21T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-21T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-21T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-22T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-22T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-22T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-22T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-23T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-23T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-23T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-23T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-24T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-24T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-24T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-24T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-25T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-25T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-25T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-25T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-26T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-26T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-26T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-26T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-27T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-27T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-27T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-27T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-28T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-28T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-28T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-28T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-29T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-29T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-29T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-29T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-30T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-30T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-30T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-30T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-31T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-31T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-31T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-03-31T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-01T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-01T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-01T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-01T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-02T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-02T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-02T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-02T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-03T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-03T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-03T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-03T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-04T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-04T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-04T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-04T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-05T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-05T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-05T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-05T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-06T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-06T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-06T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-06T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-07T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-07T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-07T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-07T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-08T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-08T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-08T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-08T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-09T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-09T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-09T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-09T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-10T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-10T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-10T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-10T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-11T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-11T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-11T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-11T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-12T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-12T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-12T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-12T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-13T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-13T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-13T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-13T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-14T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-14T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-14T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "PP",
+                    "time": "2026-04-14T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "IP",
+                    "time": "2026-04-14T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                },
+                {
+                    "type": "MD",
+                    "time": "2026-04-14T00:00",
+                    "payoff": 0,
+                    "currency": "USD",
+                    "nominalValue": 0,
+                    "nominalRate": 0,
+                    "nominalAccrued": 0
+                }
+            ]
+        }
+    ],
+    "totalDurationMs": 15102,
+    "timestamp": "2026-03-11T14:01:55.150Z"
+}

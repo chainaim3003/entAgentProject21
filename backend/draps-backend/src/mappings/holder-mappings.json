@@ -1,0 +1,27 @@
+{
+  "comment": "JSONPath mappings for holder collection - maps config values to collection fields",
+  
+  "user_thresholds.min_backing_ratio": [
+    "$.item[?(@.name=='addBackingRatioModel')].request.body.raw~.backingThreshold"
+  ],
+  
+  "user_thresholds.max_wam_days": [
+    "$.item[?(@.name=='addComplianceDriftModel')].request.body.raw~.wamMaxDays"
+  ],
+  
+  "user_thresholds.min_hqla_score": [
+    "$.item[?(@.name=='addComplianceDriftModel')].request.body.raw~.hqlaMinScore"
+  ],
+  
+  "user_thresholds.max_attestation_age_days": [
+    "$.item[?(@.name=='addComplianceDriftModel')].request.body.raw~.attestationMaxDays"
+  ],
+  
+  "user_thresholds.max_single_asset_concentration": [
+    "$.item[?(@.name=='addConcentrationDriftModel')].request.body.raw~.maxSingleAssetShare"
+  ],
+  
+  "generated.monitoring_times": [
+    "$.item[?(@.request.body.raw~.monitoringEventTimes)].request.body.raw~.monitoringEventTimes"
+  ]
+}
