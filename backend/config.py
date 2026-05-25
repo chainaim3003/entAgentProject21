@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # REQUIRED — Gemini reasoning
     gemini_api_key: str = Field(..., description="Google Gemini API key")
-    gemini_model: str = Field(default="gemini-1.5-pro", description="Gemini model name")
+    gemini_model: str = Field(default="gemini-2.5-flash", description="Gemini model name")
 
     # REQUIRED — DRAPS MCP server (the knot)
     draps_mcp_url: str = Field(..., description="DRAPS MCP server base URL")
