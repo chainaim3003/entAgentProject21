@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sovereign-rating.schema.json",
+  "title": "Sovereign Ratings + Spread Basis",
+  "description": "Reference table mapping ISO 3166-1 alpha-2 country codes to sovereign credit ratings (S&P / Moody's / Fitch) and the implied spread basis used by the sovereign_trapezoidal component (decimal base + peak). Lives at corridor-references/sovereign-ratings.json. Authored per design-v1-config-architecture.md \u00a76 (mentioned) and the sovereign component's source_citations. File not yet created on disk \u2014 this schema is authoritative for when it is.",
+  "type": "object",
+  "properties": {
+    "$schema":        {"type": "string"},
+    "source":         {"type": "string", "minLength": 1},
+    "last_refreshed": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "ratings": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^[A-Z]{2}$": {
+          "type": "object",
+          "properties": {
+            "country_name":         {"type": "string", "minLength": 1},
+            "agency":               {"type": "string", "enum": ["S&P", "Moody's", "Fitch"]},
+            "rating":               {"type": "string", "minLength": 1},
+            "rating_date":          {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+            "base_spread_decimal":  {"type": "number", "minimum": 0, "maximum": 0.20},
+            "peak_spread_decimal":  {"type": "number", "minimum": 0, "maximum": 0.20},
+            "source_citation":      {"type": "string", "minLength": 1}
+          },
+          "required": ["agency", "rating", "rating_date", "base_spread_decimal", "peak_spread_decimal", "source_citation"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["source", "last_refreshed", "ratings"],
+  "additionalProperties": false
+}

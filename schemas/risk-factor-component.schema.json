@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "risk-factor-component.schema.json",
+  "title": "Risk-Factor Component",
+  "description": "A risk-factor component is the executable spec of one additive contributor to the SOFR path (e.g. base_sofr, tariff, sovereign, wc). It declares the formula, the inputs it consumes, the calibration shape (if any), and source citations. profile_spec_validator enforces that every formula_id referenced from a profile resolves to one of these files and that the profile's `inputs.*` keys satisfy this file's `inputs_schema`.",
+  "type": "object",
+  "properties": {
+    "$schema":            {"type": "string"},
+    "component_id":       {"type": "string", "minLength": 1},
+    "version":            {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "description":        {"type": "string", "minLength": 1},
+    "formula_pseudocode": {"type": "string"},
+    "inputs_schema":      {"type": ["object", "null"]},
+    "calibration_schema": {"type": ["object", "null"]},
+    "source_citations": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "required": ["component_id", "version", "description", "inputs_schema"],
+  "additionalProperties": false
+}

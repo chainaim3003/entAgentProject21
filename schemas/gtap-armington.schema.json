@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gtap-armington.schema.json",
+  "title": "GTAP Armington Elasticities",
+  "description": "Reference table mapping GTAP 3-letter sector codes to Armington elasticities (and optional subsector overrides). Source: GTAP 11 database (Corong et al. 2017). Lives at gtap-references/armington-elasticities.json. Authored per design-v1-config-architecture.md \u00a78. File not yet created on disk \u2014 this schema is authoritative for when it is.",
+  "type": "object",
+  "properties": {
+    "$schema":        {"type": "string"},
+    "source":         {"type": "string", "minLength": 1},
+    "version_notes":  {"type": "string"},
+    "url":            {"type": "string", "format": "uri"},
+    "last_refreshed": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "elasticities": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z]{3}$": {
+          "type": "object",
+          "properties": {
+            "sector_name":         {"type": "string", "minLength": 1},
+            "hs_chapters":         {"type": "string", "minLength": 1},
+            "armington":           {"type": "number", "minimum": 0.5, "maximum": 20},
+            "source_paper":        {"type": "string", "minLength": 1},
+            "is_default_sentinel": {"type": "boolean"},
+            "subsector_overrides": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "armington":    {"type": "number", "minimum": 0.5, "maximum": 20},
+                  "source_paper": {"type": "string", "minLength": 1}
+                },
+                "required": ["armington", "source_paper"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["sector_name", "armington", "source_paper"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["source", "last_refreshed", "elasticities"],
+  "additionalProperties": false
+}

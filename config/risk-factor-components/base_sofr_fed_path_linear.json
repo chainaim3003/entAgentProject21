@@ -1,0 +1,20 @@
+{
+  "$schema": "../../schemas/risk-factor-component.schema.json",
+  "component_id": "base_sofr_fed_path_linear",
+  "version": "1.0.0",
+  "description": "Base SOFR path as a piecewise-linear interpolation of an initial / peak / final Fed-policy-rate triple anchored at loan_start_date.",
+  "formula_pseudocode": "for t in 0..total_months_assumption: if t <= months_to_peak: r(t) = initial + (peak - initial) * (t / months_to_peak); else: r(t) = peak + (final - peak) * ((t - months_to_peak) / (total_months_assumption - months_to_peak));",
+  "inputs_schema": {
+    "initial":                  {"type": "number", "min": -0.05, "max": 0.30, "description": "Annualised rate at t=0 (decimal, e.g. 0.045 for 4.5%)."},
+    "peak":                     {"type": "number", "min": -0.05, "max": 0.30, "description": "Annualised rate at t=months_to_peak."},
+    "final":                    {"type": "number", "min": -0.05, "max": 0.30, "description": "Annualised rate at t=total_months_assumption."},
+    "months_to_peak":           {"type": "integer", "min": 1, "max": 600, "description": "Months from loan_start_date to peak."},
+    "total_months_assumption":  {"type": "integer", "min": 1, "max": 600, "description": "Horizon over which the curve is defined."}
+  },
+  "calibration_schema": null,
+  "source_citations": [
+    "Federal Reserve H.15 / SOFR daily releases (FRED series SOFR).",
+    "FOMC Summary of Economic Projections dot-plot for the policy-rate path.",
+    "V1 inline FED_PATH in SWAPS-1LOAN-WHAT-IF-3-INP-FINAL.json (preserved verbatim by india-us-textiles.json for Iteration 1)."
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "../../schemas/risk-factor-component.schema.json",
+  "component_id": "tariff_gtap_quadratic",
+  "version": "1.0.0",
+  "description": "GTAP-grounded tariff component: tariff(t) * Armington * pass_through scaled by a quadratic calibration polynomial in tariff(t). Tariff(t) is interpolated via a trapezoidal stress curve (initial = tariff_current, plateau at tariff_peak, descent back toward tariff_current).",
+  "formula_pseudocode": "tariff(t) = trapezoid(tariff_current_pct -> tariff_peak_pct, stress_timing); gtap_base_bps = (tariff(t) * armington_elasticity * pass_through) * 100; calib = c0 + c1*tariff(t) + c2*tariff(t)^2; out_bps = gtap_base_bps * calib;",
+  "inputs_schema": {
+    "tariff_current_pct":   {"type": "number", "min": 0,   "max": 5,   "description": "Tariff at loan_start_date as decimal (e.g. 0.50 for 50%)."},
+    "tariff_peak_pct":      {"type": "number", "min": 0,   "max": 5,   "description": "Tariff at peak of stress curve. Equal to tariff_current_pct means flat (no escalation)."},
+    "armington_elasticity": {"type": "number", "min": 0.5, "max": 20,  "description": "GTAP Armington elasticity for the commodity_gtap sector."},
+    "pass_through":         {"type": "number", "min": 0,   "max": 1,   "description": "Share of the tariff passed through to importer purchase price."},
+    "stress_timing":        {"type": "object",
+                             "properties": {
+                                "months_to_peak": {"type": "integer", "min": 0, "max": 600},
+                                "plateau_months": {"type": "integer", "min": 0, "max": 600},
+                                "descent_months": {"type": "integer", "min": 0, "max": 600}
+                             }}
+  },
+  "calibration_schema": {
+    "polynomial_kind": {"const": "quadratic"},
+    "coefficients":    {"type": "object",
+                        "properties": {
+                            "constant":  {"type": "number"},
+                            "linear":    {"type": "number"},
+                            "quadratic": {"type": "number"}
+                        }}
+  },
+  "source_citations": [
+    "Armington (1969). A Theory of Demand for Products Distinguished by Place of Production. IMF Staff Papers 16(1).",
+    "GTAP 11 Database (Corong et al. 2017). Purdue University. https://www.gtap.agecon.purdue.edu/databases/v11/",
+    "Wikipedia summary on Armington elasticity median 3.8 across 3,524 estimates (2019 meta-analysis).",
+    "V1 inline CALIBRATION = {constant: -35.9048, linear: 133.6627, quadratic: -116.1008} in SWAPS-1LOAN-WHAT-IF-3-INP-FINAL.json (preserved verbatim by india-us-textiles.json for Iteration 1)."
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hedge-spec.schema.json",
+  "title": "Hedge Spec",
+  "description": "A hedge spec defines the per-customer policy for the A/B/C (or larger) scenario set: how many scenarios, when each swap kicks in, how the fixed rate is determined, and the ACTUS contract templates. Loaded by hedge_spec_resolver (N3b) and consumed by the composer (N3d).",
+  "type": "object",
+  "properties": {
+    "$schema": {"type": "string"},
+    "spec_id": {"type": "string", "minLength": 1},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "_notes":  {"type": "object"},
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id":                  {"type": "string", "minLength": 1},
+          "label":               {"type": "string", "minLength": 1},
+          "swap_offset_months":  {"type": "integer", "minimum": 0, "maximum": 600}
+        },
+        "required": ["id", "label"],
+        "additionalProperties": false
+      }
+    },
+    "fixed_rate_rule": {
+      "type": "string",
+      "enum": ["discount_from_path", "supplied", "market_quote"]
+    },
+    "fixed_rate_params": {
+      "type": "object",
+      "description": "Shape depends on fixed_rate_rule. For discount_from_path: swap_now_discount_bps + swap_later_discount_bps. For supplied: the fixed rates themselves. For market_quote: a curve reference. Cross-rule validation lives in profile_spec_validator."
+    },
+    "contract_template": {
+      "type": "object",
+      "properties": {
+        "loan": {
+          "type": "object",
+          "properties": {
+            "actus_type":    {"type": "string", "minLength": 1},
+            "day_count":     {"type": "string", "minLength": 1},
+            "payment_cycle": {"type": "string", "minLength": 1}
+          },
+          "required": ["actus_type"],
+          "additionalProperties": true
+        },
+        "swap": {
+          "type": "object",
+          "properties": {
+            "actus_type": {"type": "string", "minLength": 1},
+            "fixed_leg":  {"type": "string", "minLength": 1},
+            "float_leg":  {"type": "string", "minLength": 1}
+          },
+          "required": ["actus_type"],
+          "additionalProperties": true
+        }
+      },
+      "required": ["loan", "swap"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["spec_id", "version", "scenarios", "fixed_rate_rule"],
+  "additionalProperties": false
+}

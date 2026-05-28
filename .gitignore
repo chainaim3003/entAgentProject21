@@ -18,8 +18,16 @@ env/
 # LangGraph checkpoints & memory store (runtime state)
 checkpoints.db
 checkpoints.db-journal
+checkpoints.db-shm
+checkpoints.db-wal
 memory.db
 memory.db-journal
+memory.db-shm
+memory.db-wal
+
+# V1 runtime debug artifacts (kept on disk but not committed; baseline-capture script
+# may copy selected files into backend/tests/fixtures/v1-baseline/ in Phase 0)
+backend/local_run_artifacts/
 
 # Node / frontend
 node_modules/

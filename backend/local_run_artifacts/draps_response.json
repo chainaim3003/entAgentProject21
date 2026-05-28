@@ -13,7 +13,7 @@
       "url": "http://127.0.0.1:8083/eventsBatch",
       "status": "success",
       "httpStatus": 200,
-      "durationMs": 40
+      "durationMs": 160
     },
     {
       "step": 2,
@@ -22,7 +22,7 @@
       "url": "http://127.0.0.1:8083/eventsBatch",
       "status": "success",
       "httpStatus": 200,
-      "durationMs": 18
+      "durationMs": 27
     },
     {
       "step": 3,
@@ -31,7 +31,7 @@
       "url": "http://127.0.0.1:8083/eventsBatch",
       "status": "success",
       "httpStatus": 200,
-      "durationMs": 16
+      "durationMs": 21
     },
     {
       "step": 4,
@@ -40,7 +40,7 @@
       "url": "http://127.0.0.1:8083/",
       "status": "success",
       "httpStatus": 200,
-      "durationMs": 12
+      "durationMs": 11
     }
   ],
   "simulation": [
@@ -498,8 +498,8 @@
     "C_loan": "192275",
     "C_swap": "24884.999999999996"
   },
-  "totalDurationMs": 94,
-  "timestamp": "2026-05-16T18:21:43.482Z",
+  "totalDurationMs": 227,
+  "timestamp": "2026-05-27T05:58:54.954Z",
   "configMetadata": {
     "entity_type": "holder",
     "jurisdiction": "US-GENIUS",

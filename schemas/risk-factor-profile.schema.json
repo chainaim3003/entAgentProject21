@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "risk-factor-profile.schema.json",
+  "title": "Risk-Factor Profile",
+  "description": "A risk-factor profile defines how SOFR-path inputs are produced for an ACTUS swap simulation. Profiles are layered (base / corridor / commodity or domestic) and merged by profile_resolver per design-v1-config-architecture.md \u00a74. This schema is structural; cross-file checks (formula_id references, inputs match component schemas, mode invariants) are enforced by profile_spec_validator (N3c).",
+  "type": "object",
+  "properties": {
+    "$schema":      {"type": "string"},
+    "profile_id":   {"type": "string", "minLength": 1},
+    "version":      {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "mode":         {"type": "string", "enum": ["derived", "supplied", "derived_domestic"]},
+    "dispatch":     {"type": "string", "enum": ["draps_v1", "v2_direct"]},
+    "hedge_spec_id":{"type": "string", "minLength": 1},
+    "applies_to": {
+      "type": "object",
+      "properties": {
+        "mode":           {"type": "string", "enum": ["export_import", "domestic"]},
+        "exporter":       {"type": "string", "minLength": 2},
+        "importer":       {"type": "string", "minLength": 2},
+        "commodity_gtap": {"type": "string", "minLength": 1},
+        "industry":       {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "_notes": {"type": "object"},
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name":        {"type": "string", "minLength": 1},
+          "formula_id":  {"type": "string", "minLength": 1},
+          "inputs":      {"type": "object"},
+          "calibration": {"type": "object"},
+          "source":      {"type": "object"}
+        },
+        "required": ["name", "formula_id"],
+        "additionalProperties": false
+      }
+    },
+    "loan_spread_default": {"type": "number", "minimum": 0, "maximum": 1},
+    "tenor_grid": {
+      "type": "object",
+      "properties": {
+        "kind":           {"type": "string", "enum": ["quarterly", "monthly", "semi-annual", "annual"]},
+        "horizon_months": {"type": "integer", "minimum": 1, "maximum": 600},
+        "anchor":         {"type": "string", "minLength": 1}
+      },
+      "required": ["kind", "horizon_months", "anchor"],
+      "additionalProperties": false
+    },
+    "supplied": {
+      "type": "object",
+      "description": "Used when mode=supplied. Carries a pre-computed SOFR path and the two fixed rates.",
+      "properties": {
+        "sofr_path": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "time":  {"type": "string", "minLength": 1},
+              "value": {"type": "number"}
+            },
+            "required": ["time", "value"],
+            "additionalProperties": false
+          }
+        },
+        "swap_now_fixed_rate":   {"type": "number"},
+        "swap_later_fixed_rate": {"type": "number"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["profile_id", "version"],
+  "additionalProperties": false
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "../../schemas/hedge-spec.schema.json",
+  "spec_id": "default-3-scenario",
+  "version": "1.0.0",
+  "_notes": {
+    "purpose": "V1 default 3-scenario A/B/C hedge spec. Used by every Iteration-1 profile that does not name a different hedge_spec_id.",
+    "v1_match": "swap_now_discount_bps=100 and swap_later_discount_bps=70 match V1 SWAPS-1LOAN-WHAT-IF-DEMO.json (swap_discount_now / swap_discount_later)."
+  },
+  "scenarios": [
+    {"id": "A", "label": "No hedge"},
+    {"id": "B", "label": "Swap now",         "swap_offset_months": 0},
+    {"id": "C", "label": "Swap in 3 months", "swap_offset_months": 3}
+  ],
+  "fixed_rate_rule": "discount_from_path",
+  "fixed_rate_params": {
+    "swap_now_discount_bps":   100,
+    "swap_later_discount_bps":  70
+  },
+  "contract_template": {
+    "loan":  {"actus_type": "PAM",   "day_count": "30E360", "payment_cycle": "P3ML1"},
+    "swap":  {"actus_type": "SWAPS", "fixed_leg": "PFL",    "float_leg": "SOFR"}
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "$schema": "../../../schemas/risk-factor-profile.schema.json",
+  "profile_id": "india-us-textiles-v1",
+  "version": "1.0.0",
+  "mode": "derived",
+  "dispatch": "draps_v1",
+  "applies_to": {
+    "mode": "export_import",
+    "exporter": "IN",
+    "importer": "US",
+    "commodity_gtap": "tex"
+  },
+  "_notes": {
+    "purpose": "The byte-equality anchor for V2. dispatch=draps_v1 routes the knot through the V1 DRAPS path (which executes the inline Postman JS in DATA/SWAPS-1LOAN-WHAT-IF-DEMO.json). Component inputs below are advisory in this iteration; they become executed when a future profile sets dispatch=v2_direct.",
+    "v1_runtime_discrepancy_tariff": "The current V1 Python client (backend/draps_client.py:_build_config_data) sends tariff_current=tariff_peak (flat). The escalation values 0.50 -> 0.60 below match the design intent recorded in design-v1-config-architecture.md \u00a73.1 and reflect V1's underlying Postman JS calibration, not the Python wrapper. Reconcile in Iteration 4+ when dispatch=v2_direct activates.",
+    "source_of_truth_for_v1_constants": "design-v1-config-architecture.md \u00a73.1 (marked VERIFIED against SWAPS-1LOAN-WHAT-IF-3-INP-FINAL.json at design time)."
+  },
+  "components": [
+    {
+      "name": "base_sofr",
+      "formula_id": "base_sofr_fed_path_linear",
+      "inputs": {
+        "initial": 0.0450,
+        "peak":    0.0550,
+        "final":   0.0475,
+        "months_to_peak": 12,
+        "total_months_assumption": 24
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "corridor-references/policy-rate-paths.json#US/Fed/2026Q1",
+        "note": "V1 inline FED_PATH; corridor-references file scaffolded in Iteration 2+"
+      }
+    },
+    {
+      "name": "tariff",
+      "formula_id": "tariff_gtap_quadratic",
+      "inputs": {
+        "tariff_current_pct": 0.50,
+        "tariff_peak_pct":    0.60,
+        "armington_elasticity": 3.8,
+        "pass_through":         0.20,
+        "stress_timing": {
+          "months_to_peak":  12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      },
+      "calibration": {
+        "polynomial_kind": "quadratic",
+        "coefficients": {
+          "constant":  -35.9048,
+          "linear":     133.6627,
+          "quadratic": -116.1008
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "gtap-references/armington-elasticities.json#tex",
+        "citation": "GTAP 11, Corong et al. (2017); Armington Wikipedia median 3.8 (range 2.5-5.1)"
+      }
+    },
+    {
+      "name": "sovereign",
+      "formula_id": "sovereign_trapezoidal",
+      "inputs": {
+        "initial": 0.0050,
+        "peak":    0.0070,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months": 3,
+          "descent_months": 9
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "corridor-references/sovereign-ratings.json#IN",
+        "citation": "S&P BBB (Aug 2025), 50bps base / 70bps peak per V1 corridor table"
+      }
+    },
+    {
+      "name": "wc",
+      "formula_id": "wc_trapezoidal",
+      "inputs": {
+        "initial": 0.0030,
+        "peak":    0.0050,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months": 3,
+          "descent_months": 9
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "(none - V1 inline value)",
+        "citation": "V1 textile DSO 60d normal / 90d stressed"
+      }
+    }
+  ],
+  "loan_spread_default": 0.025,
+  "tenor_grid": {
+    "kind": "quarterly",
+    "horizon_months": 24,
+    "anchor": "loan_start_date"
+  }
+}

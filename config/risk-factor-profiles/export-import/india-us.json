@@ -1,0 +1,44 @@
+{
+  "$schema": "../../../schemas/risk-factor-profile.schema.json",
+  "profile_id": "india-us-corridor",
+  "version": "1.0.0",
+  "applies_to": {
+    "mode": "export_import",
+    "exporter": "IN",
+    "importer": "US"
+  },
+  "_notes": {
+    "purpose": "Corridor-level layer for India \u2192 United States export-import scenarios with no commodity override. Carries the Fed-path inputs (importer = US side) and the sovereign spread inputs (exporter = IN side) that are commodity-independent. Tariff and working-capital inputs are commodity-specific and remain in the commodity-leaf layer (e.g. india-us-textiles.json).",
+    "merge_position": "Middle. Loaded by profile_resolver after export-import/_base.json and before any commodity leaf. Inherits the 4-component skeleton, stress_timing, tenor_grid, loan_spread_default, mode, and dispatch from _base; merges these inputs on top.",
+    "source_of_values": "V1 SWAPS-1LOAN-WHAT-IF-3-INP-FINAL.json corridor table 'India-United States': sovereign 50bps base / 70bps peak; FED_PATH initial=0.0450, peak=0.0550, final=0.0475."
+  },
+  "components": [
+    {
+      "name": "base_sofr",
+      "formula_id": "base_sofr_fed_path_linear",
+      "inputs": {
+        "initial": 0.0450,
+        "peak":    0.0550,
+        "final":   0.0475
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "corridor-references/policy-rate-paths.json#US/Fed/2026Q1",
+        "note": "V1 inline FED_PATH (initial 4.50%, peak 5.50%, final 4.75%). corridor-references file scaffolded in Iteration 2+; until populated, values live here."
+      }
+    },
+    {
+      "name": "sovereign",
+      "formula_id": "sovereign_trapezoidal",
+      "inputs": {
+        "initial": 0.0050,
+        "peak":    0.0070
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "corridor-references/sovereign-ratings.json#IN",
+        "citation": "S&P BBB (Aug 2025), 50bps base / 70bps peak per V1 CORRIDOR_PARAMETERS for India-United States."
+      }
+    }
+  ]
+}

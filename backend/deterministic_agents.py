@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 # ONLY deterministic imports below. Adding google.generativeai here would break the design.
+import actus_client
 import actus_mentor_client
 import draps_client
 import memory_store
@@ -170,6 +171,61 @@ def simulation_node(state: dict) -> dict:
         raise RuntimeError(
             "simulation_node called without validated_inputs. "
             "This indicates a bug in graph wiring — the boundary was bypassed."
+        )
+
+    # Iter-6a (D3): v2_direct compute+ACTUS path. When the composer ran
+    # dispatch='v2_direct' (mode='derived') it derived the SOFR path + swap fixed
+    # rates in V2 and stamped them onto knot_payload['v2_direct']. That path
+    # bypasses DRAPS entirely and POSTs the A/B/C contract batches straight to the
+    # ACTUS risk engine. Detected here as a NEW consumer of this node (purely
+    # additive: it sits AFTER the validated-None wiring guard, which must stay
+    # first, and BEFORE the supplied/draps_v1 logic, which stays byte-identical).
+    # v2_direct is mode='derived' and never sets state['supplied'], so it cannot
+    # collide with the supplied guard below.
+    knot = state.get("knot_payload")
+    if isinstance(knot, dict) and knot.get("v2_direct") is not None:
+        spec = state.get("resolved_hedge_spec") or {}
+        result = actus_client.run_v2_direct(knot, spec)
+        summary = (
+            f"A=${result.get('A_total', 0):,.0f} "
+            f"B=${result.get('B_total', 0):,.0f} "
+            f"C=${result.get('C_total', 0):,.0f} (v2_direct)"
+        )
+        return {
+            "simulation_result": result,
+            "audit_log": [
+                _audit_entry(
+                    "simulation",
+                    summary,
+                    {"dispatch": "v2_direct", "keys": list(result.keys())},
+                )
+            ],
+        }
+
+    # Iter-3 deliverable 4c (D3: honest deferral). When the caller supplied a SOFR
+    # path + fixed rates via POST /run, the request lands in state['supplied'] and
+    # the composer carries it onto knot_payload — but DRAPS itself derives the
+    # SOFR path internally (inline Postman JS in DATA/SWAPS-1LOAN-WHAT-IF-DEMO.json)
+    # and has no code path to honor a supplied override. Rather than silently
+    # ignore the caller-supplied numbers (which would produce a derived-mode
+    # result mislabelled as supplied), raise NotImplementedError here naming the
+    # bridge as the pending piece. The two viable follow-up paths are documented
+    # in PROJECT_CONTEXT.md (after Iter-3 ships).
+    if state.get("supplied") is not None:
+        raise NotImplementedError(
+            "simulation_node: state['supplied'] is present but the DRAPS bridge "
+            "for caller-supplied SOFR paths is not yet implemented (Iter-3 "
+            "deliverable 4c, D3 honest-deferral boundary). DRAPS derives SOFR "
+            "internally via the inline Postman JS in "
+            "DATA/SWAPS-1LOAN-WHAT-IF-DEMO.json and there is no code path to "
+            "override that with a supplied path.\n\n"
+            "Two viable bridge paths for a follow-up iteration:\n"
+            "  (a) modify DRAPS-side Postman JS to honor a supplied_sofr_path "
+            "in configData\n"
+            "  (b) skip DRAPS in supplied mode and call ACTUS directly from V2\n\n"
+            "Refusing to silently fall back to derivation; the caller's "
+            "authorisation of specific numbers is the entire contract of "
+            "supplied mode."
         )
 
     # Real DRAPS call. May raise NotImplementedError until the contract is verified

@@ -1,0 +1,66 @@
+{
+  "$schema": "../../../schemas/risk-factor-profile.schema.json",
+  "profile_id": "export-import-base",
+  "version": "1.0.0",
+  "mode": "derived",
+  "dispatch": "draps_v1",
+  "applies_to": {
+    "mode": "export_import"
+  },
+  "_notes": {
+    "purpose": "Common defaults for all export-import profiles. Never used alone \u2014 always merged under a corridor (e.g. india-us.json) and (optionally) commodity (e.g. india-us-textiles.json) layer per design-v1-config-architecture.md \u00a74. Carries the 4-component skeleton (base_sofr + tariff + sovereign + wc), the stress_timing 12/3/9 shape, the 24-month quarterly tenor grid, the 250bps default loan spread, and the tariff pass_through 0.20 that are consistent across V1.",
+    "merge_position": "Least specific. Loaded first by profile_resolver; corridor- and commodity-level files override these values via deep merge.",
+    "source_of_defaults": "V1 SWAPS-1LOAN-WHAT-IF-3-INP-FINAL.json constants common to every corridor/commodity case: stress_timing months_to_peak=12, plateau_months=3, descent_months=9; loan_spread 250bps; tenor 24mo quarterly anchored on loan_start_date; tariff pass_through 0.20; base_sofr horizon months_to_peak=12, total_months_assumption=24.",
+    "dispatch_default": "draps_v1 keeps Iteration 2-3 routed through the V1 DRAPS path so the byte-equality gate stays green. Commodity-level profiles can override to v2_direct in Iteration 4+."
+  },
+  "components": [
+    {
+      "name": "base_sofr",
+      "formula_id": "base_sofr_fed_path_linear",
+      "inputs": {
+        "months_to_peak": 12,
+        "total_months_assumption": 24
+      }
+    },
+    {
+      "name": "tariff",
+      "formula_id": "tariff_gtap_quadratic",
+      "inputs": {
+        "pass_through": 0.20,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      }
+    },
+    {
+      "name": "sovereign",
+      "formula_id": "sovereign_trapezoidal",
+      "inputs": {
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      }
+    },
+    {
+      "name": "wc",
+      "formula_id": "wc_trapezoidal",
+      "inputs": {
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      }
+    }
+  ],
+  "loan_spread_default": 0.025,
+  "tenor_grid": {
+    "kind": "quarterly",
+    "horizon_months": 24,
+    "anchor": "loan_start_date"
+  }
+}

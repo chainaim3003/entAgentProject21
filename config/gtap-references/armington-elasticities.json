@@ -1,0 +1,15 @@
+{
+  "$schema": "../../schemas/gtap-armington.schema.json",
+  "source": "GTAP 11 Database (Corong et al. 2017), Purdue University.",
+  "version_notes": "Iteration-4 seed. Carries one entry: 'tex' (textiles & wearing apparel) at 3.8, used by india-us-textiles.json and vietnam-us-textiles.json. Additional GTAP sectors land as new corridor/commodity pairs are added in later iterations. The Armington elasticity is sector-level, NOT country-level: the 'tex' figure applies to any exporter shipping textiles into any importer. The corridor file selects the sector; this file supplies the elasticity.",
+  "url": "https://www.gtap.agecon.purdue.edu/databases/v11/",
+  "last_refreshed": "2026-05-27",
+  "elasticities": {
+    "tex": {
+      "sector_name": "Textiles and wearing apparel",
+      "hs_chapters": "HS 50-63",
+      "armington": 3.8,
+      "source_paper": "Corong, E. L., Hertel, T. W., McDougall, R. A., Tsigas, M. E., & van der Mensbrugghe, D. (2017). The Standard GTAP Model, Version 7. Journal of Global Economic Analysis 2(1). Median 3.8 across 3,524 elasticity estimates per the 2019 meta-analysis (range 2.5-5.1)."
+    }
+  }
+}

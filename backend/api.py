@@ -29,12 +29,52 @@ from explanation_agent import ask_explanation
 # Schemas
 # ───────────────────────────────────────────────────────────────────────
 
+class SuppliedSofrPathPoint(BaseModel):
+    """One point on a caller-supplied SOFR path.
+
+    `time` is an ISO 8601 timestamp string (e.g. '2026-02-28T00:00:00'), matching
+    the V1 SOFR_PATH shape returned by DRAPS for the derived path.
+    `value` is the rate as a decimal (e.g. 0.0602 for 6.02%).
+    """
+    time: str = Field(..., min_length=1)
+    value: float
+
+
+class Supplied(BaseModel):
+    """Caller-supplied SOFR path + fixed swap rates (Iteration 3, Problem A).
+
+    When this block is present on POST /run, the V2 graph routes via
+    `mode='supplied'`: the profile resolver synthesizes a supplied-mode profile,
+    the composer copies this block verbatim into `knot_payload['supplied']`,
+    and the simulation node honors these numbers instead of derivation.
+
+    The shape mirrors the composer's `SUPPLIED_REQUIRED_KEYS` contract — the
+    validation here is the first line of defense; the composer re-validates
+    so the contract is enforced at both the API edge and the graph boundary.
+    """
+    sofr_path: list[SuppliedSofrPathPoint] = Field(
+        ...,
+        min_length=1,
+        description="Non-empty list of {time, value} points. Caller is responsible "
+                    "for ordering and frequency; the composer does not re-sort or interpolate.",
+    )
+    swap_now_fixed: float = Field(..., description="Fixed rate for the 'swap now' (B) scenario, as a decimal.")
+    swap_later_fixed: float = Field(..., description="Fixed rate for the 'swap later' (C) scenario, as a decimal.")
+
+
 class RunRequest(BaseModel):
     prompt: str = Field(..., min_length=1, description="Natural-language hedging question")
     loan_doc: str = Field(..., min_length=1, description="Private loan document content (text)")
     thread_id: str | None = Field(
         default=None,
         description="Optional thread_id for resume. If absent, server generates one.",
+    )
+    supplied: Supplied | None = Field(
+        default=None,
+        description="Optional. If present, the request is a supplied-mode run: "
+                    "the caller is asserting a pre-computed SOFR path and fixed "
+                    "swap rates that should flow through verbatim. The profile "
+                    "resolver synthesizes a supplied-mode profile when this is set.",
     )
 
 
@@ -92,6 +132,30 @@ def _get_runs(request: Request) -> dict[str, asyncio.Task]:
 # POST /run
 # ───────────────────────────────────────────────────────────────────────
 
+def _build_initial_state(body: RunRequest, thread_id: str) -> dict[str, Any]:
+    """Translate a /run request body into the graph's initial state.
+
+    Extracted from the route handler so it can be unit-tested without spinning up
+    the FastAPI app, the SQLite checkpointer, or the LangGraph compile step.
+
+    Iteration-3 contract: when `body.supplied` is present, lift it into
+    `state['supplied']` as a plain dict (Pydantic → dict via model_dump).
+    Otherwise the state shape is identical to the V1 baseline.
+    """
+    initial_state: dict[str, Any] = {
+        "prompt": body.prompt,
+        "private_loan_doc": body.loan_doc,
+        "thread_id": thread_id,
+        "retry_count": 0,
+        "validation_errors": [],
+        "audit_log": [],
+    }
+    if body.supplied is not None:
+        # Pydantic → plain dict matches the composer's expected shape exactly.
+        initial_state["supplied"] = body.supplied.model_dump()
+    return initial_state
+
+
 @router.post("/run", response_model=RunResponse)
 async def run(request: Request, body: RunRequest) -> RunResponse:
     """Start a new hedge analysis. Returns immediately; client polls via /trace."""
@@ -101,14 +165,7 @@ async def run(request: Request, body: RunRequest) -> RunResponse:
     thread_id = body.thread_id or f"thread-{uuid.uuid4().hex[:12]}"
     config = {"configurable": {"thread_id": thread_id}}
 
-    initial_state = {
-        "prompt": body.prompt,
-        "private_loan_doc": body.loan_doc,
-        "thread_id": thread_id,
-        "retry_count": 0,
-        "validation_errors": [],
-        "audit_log": [],
-    }
+    initial_state = _build_initial_state(body, thread_id)
 
     # Fire-and-forget the workflow. /trace will read the stream of checkpoints.
     task = asyncio.create_task(_invoke_graph(graph_app, initial_state, config))

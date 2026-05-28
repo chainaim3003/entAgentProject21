@@ -1,0 +1,108 @@
+{
+  "$schema": "../../../schemas/risk-factor-profile.schema.json",
+  "profile_id": "vietnam-us-textiles-v1",
+  "version": "1.0.0",
+  "mode": "derived",
+  "dispatch": "draps_v1",
+  "applies_to": {
+    "mode": "export_import",
+    "exporter": "VN",
+    "importer": "US",
+    "commodity_gtap": "tex"
+  },
+  "_notes": {
+    "purpose": "Iteration-4 commodity leaf for Vietnam \u2192 US textile-sector exports. Demonstrates 'any corridor + any commodity' via the existing _base + corridor + commodity 3-layer merge with no Python changes. dispatch=draps_v1 keeps the knot routed through the V1 DRAPS path so byte-equality for india-us-textiles stays green; the component values below are advisory in this iteration and become executed when a future profile sets dispatch=v2_direct.",
+    "iter4_demo_choice": "Tariff inputs are held IDENTICAL to india-us-textiles (0.50 current / 0.60 peak) by design. The architectural point of Iteration 4 is that the corridor swap mechanism works; the ONLY corridor-level value that should visibly differ between vietnam-us-textiles and india-us-textiles in this iteration is the sovereign spread. Real Vietnam-specific tariff sourcing (e.g. the S&P-quoted 0.20 current / 0.46 peak figures from theinvestor.vn, Sept 7 2025) lands in Iteration 9 alongside live tariff binding, where the values are actually executed rather than advisory.",
+    "v1_runtime_discrepancy_tariff": "Same as india-us-textiles.json: the current V1 Python client (backend/draps_client.py:_build_config_data) sends tariff_current=tariff_peak (flat). The escalation values 0.50 -> 0.60 below match the design intent recorded in design-v1-config-architecture.md \u00a73.1 and reflect V1's underlying Postman JS calibration, not the Python wrapper. Reconcile when dispatch=v2_direct activates.",
+    "source_of_calibration": "Calibration coefficients (constant -35.9048 / linear 133.6627 / quadratic -116.1008) are sector-level (textile quadratic), reused verbatim from india-us-textiles per design-v1-config-architecture.md \u00a73.1.",
+    "iter4_role": "First non-India commodity leaf. Proves: (a) the corridor + commodity merge resolves cleanly for VN-US-tex via the same _base \u2192 vietnam-us \u2192 vietnam-us-textiles chain that India uses; (b) the resolved profile satisfies the same JSON Schema + N3c cross-file checks that lock india-us-textiles; (c) the sovereign spread is the only corridor-level value that differs between the two leaves \u2014 visible in test_composer_derived.py's frozen fixture."
+  },
+  "components": [
+    {
+      "name": "base_sofr",
+      "formula_id": "base_sofr_fed_path_linear",
+      "inputs": {
+        "initial": 0.0450,
+        "peak":    0.0550,
+        "final":   0.0475,
+        "months_to_peak": 12,
+        "total_months_assumption": 24
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "corridor-references/policy-rate-paths.json#US/Fed/2026Q1",
+        "note": "Identical to india-us-textiles.json (importer = US in both corridors). Redeclared here for explicitness in the commodity leaf, but a no-op against the corridor file's merge."
+      }
+    },
+    {
+      "name": "tariff",
+      "formula_id": "tariff_gtap_quadratic",
+      "inputs": {
+        "tariff_current_pct":   0.50,
+        "tariff_peak_pct":      0.60,
+        "armington_elasticity": 3.8,
+        "pass_through":         0.20,
+        "stress_timing": {
+          "months_to_peak":  12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      },
+      "calibration": {
+        "polynomial_kind": "quadratic",
+        "coefficients": {
+          "constant":  -35.9048,
+          "linear":     133.6627,
+          "quadratic": -116.1008
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "gtap-references/armington-elasticities.json#tex",
+        "citation": "Armington 3.8 from GTAP 11 (Corong et al. 2017), sector-level so identical to india-us-textiles. Tariff levels 0.50 / 0.60 held identical to india-us-textiles by Iter-4 design choice (see _notes.iter4_demo_choice). Calibration coefficients reused verbatim from india-us-textiles (V1 inline CALIBRATION) \u2014 sector-level quadratic, not country-specific."
+      }
+    },
+    {
+      "name": "sovereign",
+      "formula_id": "sovereign_trapezoidal",
+      "inputs": {
+        "initial": 0.0100,
+        "peak":    0.0140,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months": 3,
+          "descent_months": 9
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "corridor-references/sovereign-ratings.json#VN",
+        "citation": "S&P BB+ Local Currency LT (June 28 2025, stable). 100bps base / 140bps peak: 2x the V1 India-BBB anchor (50/70bps) reflecting the BB+ vs BBB ratings-ladder gap and the speculative-grade boundary crossing. Methodology placeholder pending Iter-9 live CDS binding."
+      }
+    },
+    {
+      "name": "wc",
+      "formula_id": "wc_trapezoidal",
+      "inputs": {
+        "initial": 0.0030,
+        "peak":    0.0050,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months": 3,
+          "descent_months": 9
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "(none - sector-level V1 inline value)",
+        "citation": "V1 textile DSO 60d normal / 90d stressed. Reused verbatim from india-us-textiles since this is a sector-level proxy not country-specific in V1; Vietnam textile-DSO snapshots land in Iter-9 alongside live data binding."
+      }
+    }
+  ],
+  "loan_spread_default": 0.025,
+  "tenor_grid": {
+    "kind": "quarterly",
+    "horizon_months": 24,
+    "anchor": "loan_start_date"
+  }
+}

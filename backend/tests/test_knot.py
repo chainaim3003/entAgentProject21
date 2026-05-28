@@ -45,7 +45,7 @@ def clean_state() -> dict:
             "commodity_hint": "textiles imported from India",
             "corridor_hint": "India to US",
         },
-        "market_context": {
+        "public_market_context": {
             "gtap_commodity_code": "50",
             "corridor": {"origin": "IN", "destination": "US"},
             "tariff_assumption_pct": 0.25,
@@ -120,7 +120,7 @@ def test_validator_rejects_bad_intake(clean_state, patch, expected_substr):
 )
 def test_validator_rejects_bad_market_context(clean_state, patch, expected_substr):
     state = dict(clean_state)
-    state["market_context"] = {**clean_state["market_context"], **patch}
+    state["public_market_context"] = {**clean_state["public_market_context"], **patch}
     out = validator_node(state)
     assert out["validation_errors"], "expected validation errors"
     assert any(expected_substr in e for e in out["validation_errors"])
@@ -164,7 +164,7 @@ def _draps_is_implemented() -> bool:
     not _draps_is_implemented(),
     reason=(
         "DRAPS run_simulation not yet implemented. "
-        "See DESIGN/DESIGN1/design-1-detailed-design.md §6 note 1."
+        "See DESIGN/DESIGN-V1/design-v1-detailed-design.md §6 note 1."
     ),
 )
 def test_simulation_is_reproducible(clean_state):

@@ -145,6 +145,102 @@ def _build_config_data(validated: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Iteration-5 additions: SOFR path + fixed-rate extractors
+#
+# These helpers surface the numeric pieces of DRAPS's response that earlier
+# iterations dropped on the floor (only A/B/C totals + events were carried
+# through). They are used by the N6a Provenance Agent (Iteration 5) to
+# attribute each SOFR-path point and each fixed rate to a source. They never
+# raise; on any shape drift they return None and N6a then fails honestly per
+# the I7 invariant (every numeric input to N4 must trace to a source).
+#
+# test_byte_equality_v1.py performs the same parsing via its own raw POST
+# (see _extract_swap_fixed_rate in that file); these helpers centralise the
+# logic so simulation_result downstream callers see the same view of the
+# DRAPS response.
+# ---------------------------------------------------------------------------
+
+def _extract_sofr_path_from_env(env_vars: dict[str, Any]) -> list[dict[str, Any]] | None:
+    """Pull SOFR_PATH from DRAPS environmentVariables, JSON-decode, validate.
+
+    DRAPS stores SOFR_PATH as a JSON-encoded STRING under environmentVariables
+    (pm.environment.set wraps everything via String(value)). The decoded
+    structure is `[{"time": str, "value": number}, ...]`.
+
+    Returns the parsed list on success, or None if the field is missing,
+    not a string, not valid JSON, not a list, or any point is malformed.
+    A partial path is never returned: either the whole thing validates or
+    we return None.
+    """
+    raw = env_vars.get("SOFR_PATH")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, list) or not parsed:
+        return None
+    for pt in parsed:
+        if not isinstance(pt, dict):
+            return None
+        if "time" not in pt or "value" not in pt:
+            return None
+        if not isinstance(pt["value"], (int, float)) or isinstance(pt["value"], bool):
+            return None
+        if not isinstance(pt["time"], str):
+            return None
+    return parsed
+
+
+def _extract_fixed_rate_from_payload(
+    payload: Any, fixed_contract_id: str
+) -> float | None:
+    """Extract a SWAPS fixed-leg nominalInterestRate from a JSON-string payload.
+
+    DRAPS exposes the per-scenario swap payload as a JSON-encoded ACTUS
+    contract definition under environmentVariables.SWAP_NOW_PAYLOAD and
+    SWAP_LATER_PAYLOAD. The fixed-leg rate lives at:
+        contracts[?contractType=='SWAPS']
+            .contractStructure[?object.contractID==fixed_contract_id]
+            .object.nominalInterestRate
+
+    Returns the rate as a float, or None if the payload is missing,
+    not a string, not valid JSON, or the field is absent. Mirrors
+    test_byte_equality_v1._extract_swap_fixed_rate; kept here so
+    run_simulation's return value carries the same view.
+    """
+    if not isinstance(payload, str):
+        return None
+    try:
+        decoded = json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(decoded, dict):
+        return None
+    for c in decoded.get("contracts", []) or []:
+        if not isinstance(c, dict) or c.get("contractType") != "SWAPS":
+            continue
+        for elem in c.get("contractStructure", []) or []:
+            if not isinstance(elem, dict):
+                continue
+            obj = elem.get("object") or {}
+            if obj.get("contractID") == fixed_contract_id:
+                rate = obj.get("nominalInterestRate")
+                if isinstance(rate, bool):
+                    return None
+                if isinstance(rate, (int, float)):
+                    return float(rate)
+                if isinstance(rate, str):
+                    try:
+                        return float(rate)
+                    except ValueError:
+                        return None
+                return None
+    return None
+
+
 def _extract_scenarios(response_json: dict[str, Any]) -> dict[str, Any]:
     """Defensively pull A_total, B_total, C_total, events out of DRAPS's response.
 
@@ -194,13 +290,39 @@ def _extract_scenarios(response_json: dict[str, Any]) -> dict[str, Any]:
                 for contract in sim:
                     if isinstance(contract, dict) and isinstance(contract.get("events"), list):
                         events.extend(contract["events"])
-            return {"A_total": a, "B_total": b, "C_total": c, "events": events}
+
+            # Iter-5: also expose SOFR path and the two fixed rates so the
+            # N6a Provenance Agent can enumerate per-point attributions
+            # without a separate raw DRAPS call. These were always present
+            # in environmentVariables; only A/B/C totals were carried through
+            # in Iter-1+. If any extractor returns None, N6a will raise per I7.
+            sofr_path = _extract_sofr_path_from_env(env_vars)
+            swap_now_fixed_rate = _extract_fixed_rate_from_payload(
+                env_vars.get("SWAP_NOW_PAYLOAD"), "SWAP-B-FIXED"
+            )
+            swap_later_fixed_rate = _extract_fixed_rate_from_payload(
+                env_vars.get("SWAP_LATER_PAYLOAD"), "SWAP-C-FIXED"
+            )
+            return {
+                "A_total": a, "B_total": b, "C_total": c,
+                "events": events,
+                "sofr_path": sofr_path,
+                "swap_now_fixed_rate": swap_now_fixed_rate,
+                "swap_later_fixed_rate": swap_later_fixed_rate,
+            }
 
     # 1) Flat top-level shape
     flat = {k: response_json.get(k) for k in ("A_total", "B_total", "C_total")}
     if all(isinstance(flat[k], (int, float)) for k in flat):
         events = response_json.get("events") or response_json.get("cashflow_events") or []
-        return {**flat, "events": events}
+        # Iter-5: fallback shapes don't carry SOFR_PATH / swap payloads.
+        # Return None so N6a fails honestly per I7 if this path activates.
+        return {
+            **flat, "events": events,
+            "sofr_path": None,
+            "swap_now_fixed_rate": None,
+            "swap_later_fixed_rate": None,
+        }
 
     # 2) Nested under "scenarios"
     scenarios = response_json.get("scenarios")
@@ -215,7 +337,14 @@ def _extract_scenarios(response_json: dict[str, Any]) -> dict[str, Any]:
                 or response_json.get("events")
                 or []
             )
-            return {"A_total": a, "B_total": b, "C_total": c, "events": events}
+            # Iter-5: see note above; fallback shape, no SOFR/swap fields.
+            return {
+                "A_total": a, "B_total": b, "C_total": c,
+                "events": events,
+                "sofr_path": None,
+                "swap_now_fixed_rate": None,
+                "swap_later_fixed_rate": None,
+            }
 
     # 3) Nested under "result" or "simulationResult"
     result = response_json.get("result") or response_json.get("simulationResult")
@@ -225,7 +354,14 @@ def _extract_scenarios(response_json: dict[str, Any]) -> dict[str, Any]:
         c = result.get("C_total") or result.get("c_total")
         if all(isinstance(v, (int, float)) for v in (a, b, c)):
             events = result.get("events") or response_json.get("events") or []
-            return {"A_total": a, "B_total": b, "C_total": c, "events": events}
+            # Iter-5: see note above; fallback shape, no SOFR/swap fields.
+            return {
+                "A_total": a, "B_total": b, "C_total": c,
+                "events": events,
+                "sofr_path": None,
+                "swap_now_fixed_rate": None,
+                "swap_later_fixed_rate": None,
+            }
 
     # Honest failure — DRAPS returned data but the shape isn't recognized
     raise RuntimeError(
@@ -244,8 +380,17 @@ def run_simulation(validated_inputs: dict[str, Any]) -> dict[str, Any]:
 
     Returns:
         {
-          "A_total": float, "B_total": float, "C_total": float,
-          "events": list[dict],
+          "A_total":              float,
+          "B_total":              float,
+          "C_total":              float,
+          "events":               list[dict],
+          # Iter-5: surfaced so the N6a Provenance Agent can enumerate
+          # per-point attributions without a separate raw POST. Each may
+          # be None if the DRAPS response did not carry it (e.g. shape
+          # drift); N6a then raises per I7 (every numeric must trace).
+          "sofr_path":            list[{"time": str, "value": float}] | None,
+          "swap_now_fixed_rate":  float | None,
+          "swap_later_fixed_rate": float | None,
         }
 
     Raises:

@@ -1,0 +1,46 @@
+{
+  "$schema": "../../../schemas/risk-factor-profile.schema.json",
+  "profile_id": "vietnam-us-corridor",
+  "version": "1.0.0",
+  "applies_to": {
+    "mode": "export_import",
+    "exporter": "VN",
+    "importer": "US"
+  },
+  "_notes": {
+    "purpose": "Corridor-level layer for Vietnam \u2192 United States export-import scenarios with no commodity override. Iteration-4 deliverable. Mirrors india-us.json: carries the Fed-path inputs (importer = US side, so identical to india-us.json) and the sovereign spread inputs (exporter = VN side, BB+ S&P rating).",
+    "merge_position": "Middle. Loaded by profile_resolver after export-import/_base.json and before any commodity leaf. Inherits the 4-component skeleton, stress_timing, tenor_grid, loan_spread_default, mode, and dispatch from _base; merges these inputs on top.",
+    "source_of_values": "FED_PATH is identical to india-us.json (US-side Fed-path is corridor-independent for any X-to-US trade). Sovereign spread is anchored on S&P's BB+ Local Currency LT rating affirmed for Vietnam (June 28 2025, stable outlook; cbonds.com news 3471799, Reuters/HL coverage Sept 2025). Spread basis 100bps base / 140bps peak is doubled from the V1 India-BBB anchor (50/70bps) to reflect the BB+ vs BBB ratings-ladder gap and the speculative-grade boundary crossing.",
+    "iter4_demo_choice": "Iteration 4 holds tariff inputs IDENTICAL to india-us-textiles in the commodity leaf so that the ONLY corridor-level differentiator visible in resolved A/B/C is the sovereign spread. This is the cleanest expression of the 'any corridor without code changes' thesis (design-v1-iteration-plan.md Iteration 4). Corridor-specific tariff sourcing lands in Iteration 9 alongside live tariff binding.",
+    "methodology_placeholder": "100bps / 140bps is a methodology placeholder pending Iteration-9 live CDS or sovereign-spread API binding."
+  },
+  "components": [
+    {
+      "name": "base_sofr",
+      "formula_id": "base_sofr_fed_path_linear",
+      "inputs": {
+        "initial": 0.0450,
+        "peak":    0.0550,
+        "final":   0.0475
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "corridor-references/policy-rate-paths.json#US/Fed/2026Q1",
+        "note": "Identical to india-us.json: importer = US in both corridors, so the Fed-path is shared. corridor-references file scaffolded in Iteration 2+; until populated, values live here."
+      }
+    },
+    {
+      "name": "sovereign",
+      "formula_id": "sovereign_trapezoidal",
+      "inputs": {
+        "initial": 0.0100,
+        "peak":    0.0140
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "corridor-references/sovereign-ratings.json#VN",
+        "citation": "S&P BB+ Local Currency LT (affirmed June 28 2025, stable outlook; cbonds.com news 3471799, Reuters/HL coverage Sept 2025). One notch below investment grade (BBB-). Spread basis 100bps base / 140bps peak = 2x the V1 India-BBB anchor (50/70bps) to reflect the BB+ vs BBB ratings-ladder gap and the speculative-grade boundary crossing. Methodology placeholder pending Iteration-9 live CDS binding."
+      }
+    }
+  ]
+}

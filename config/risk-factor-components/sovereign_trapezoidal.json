@@ -1,0 +1,23 @@
+{
+  "$schema": "../../schemas/risk-factor-component.schema.json",
+  "component_id": "sovereign_trapezoidal",
+  "version": "1.0.0",
+  "description": "Sovereign-risk credit-spread contribution as a trapezoidal stress curve. Anchored on the exporter (or counterparty) country's sovereign rating-implied spread. Returned in decimal annualised units (e.g. 0.0050 = 50bps).",
+  "formula_pseudocode": "sov(t) = trapezoid(initial, peak, stress_timing); out_decimal = sov(t);",
+  "inputs_schema": {
+    "initial":       {"type": "number", "min": 0, "max": 0.20, "description": "Baseline sovereign spread at t=0 (decimal)."},
+    "peak":          {"type": "number", "min": 0, "max": 0.20, "description": "Peak sovereign spread at months_to_peak (decimal). Equal to initial means flat."},
+    "stress_timing": {"type": "object",
+                      "properties": {
+                          "months_to_peak": {"type": "integer", "min": 0, "max": 600},
+                          "plateau_months": {"type": "integer", "min": 0, "max": 600},
+                          "descent_months": {"type": "integer", "min": 0, "max": 600}
+                      }}
+  },
+  "calibration_schema": null,
+  "source_citations": [
+    "S&P / Moody's / Fitch sovereign credit ratings and rating-action releases.",
+    "V1 inline CORRIDOR_PARAMETERS (India-US base 50bps, peak 70bps) in SWAPS-1LOAN-WHAT-IF-3-INP-FINAL.json (preserved verbatim by india-us-textiles.json for Iteration 1).",
+    "Sovereign rating -> spread basis tables to be externalised into corridor-references/sovereign-ratings.json in Iteration 2+."
+  ]
+}

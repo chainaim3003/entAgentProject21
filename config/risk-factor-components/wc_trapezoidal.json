@@ -1,0 +1,23 @@
+{
+  "$schema": "../../schemas/risk-factor-component.schema.json",
+  "component_id": "wc_trapezoidal",
+  "version": "1.0.0",
+  "description": "Working-capital stress contribution as a trapezoidal curve. Captures DSO/DPO/DIO blowouts during a stress window (e.g. tariff shock causes longer payment cycles or higher in-transit inventory). Returned in decimal annualised units.",
+  "formula_pseudocode": "wc(t) = trapezoid(initial, peak, stress_timing); out_decimal = wc(t);",
+  "inputs_schema": {
+    "initial":       {"type": "number", "min": 0, "max": 0.10, "description": "Baseline WC stress at t=0 (decimal)."},
+    "peak":          {"type": "number", "min": 0, "max": 0.10, "description": "Peak WC stress (decimal)."},
+    "stress_timing": {"type": "object",
+                      "properties": {
+                          "months_to_peak": {"type": "integer", "min": 0, "max": 600},
+                          "plateau_months": {"type": "integer", "min": 0, "max": 600},
+                          "descent_months": {"type": "integer", "min": 0, "max": 600}
+                      }}
+  },
+  "calibration_schema": null,
+  "source_citations": [
+    "Atradius Payment Practices Barometer (annual, free PDF) for DSO/DPO baselines.",
+    "Intuit QuickBooks Small Business Late Payments Report (annual, free).",
+    "V1 inline WC stress (30bps baseline -> 50bps stressed for textiles, DSO 60d -> 90d) preserved verbatim by india-us-textiles.json for Iteration 1."
+  ]
+}

@@ -37,6 +37,17 @@ class Settings(BaseSettings):
     # Leave blank otherwise (ACTUS-Mentor disables auth when API_SECRET_KEY is unset).
     actus_mentor_api_key: str = Field(default="", description="X-API-Key for ACTUS-Mentor")
 
+    # OPTIONAL — ACTUS risk engine (eventsBatch) for the v2_direct dispatch path.
+    # Iter-6a: when dispatch='v2_direct', simulation_node POSTs ACTUS contract
+    # batches DIRECTLY to {actus_server_url}/eventsBatch, bypassing DRAPS. Defaulted
+    # (NOT a required-blank field) so existing draps_v1 / supplied runs and the
+    # 243-test baseline don't require a new env var — only v2_direct runs read it.
+    # Mirrors the Postman collection's hardcoded http://127.0.0.1:8083/eventsBatch.
+    actus_server_url: str = Field(
+        default="http://127.0.0.1:8083",
+        description="ACTUS risk-engine base URL for the v2_direct direct eventsBatch POST",
+    )
+
     # Persistence (defaults to local SQLite)
     checkpoint_db_url: str = Field(default="sqlite:///./checkpoints.db")
     memory_db_url: str = Field(default="sqlite:///./memory.db")

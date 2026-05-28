@@ -1,0 +1,25 @@
+{
+  "$schema": "../../schemas/hedge-spec.schema.json",
+  "spec_id": "supplied-rates-example",
+  "version": "1.0.0",
+  "_notes": {
+    "purpose": "Example hedge spec for mode='supplied' (Iteration 3, Problem A). The caller passes swap_now_fixed and swap_later_fixed (and the SOFR path) directly in the POST /run body; the composer uses those values verbatim with no derivation.",
+    "fixed_rate_params_role": "The two rates listed below are REFERENCE values only \u2014 pinned to the V2-locked numbers for byte-equality with the India-US-textiles derived run. At runtime, the composer reads the rates from state['supplied'] (populated by the request body); fixed_rate_params on this file is consulted ONLY as a fallback when no supplied block is present in the state, in which case the composer raises rather than silently using them. The presence here documents the canonical shape for a supplied-rule hedge spec.",
+    "request_shape": "POST /run accepts {prompt, loan_doc, supplied: {sofr_path: number[], swap_now_fixed: number, swap_later_fixed: number}}",
+    "v1_match": "swap_now_fixed=0.0502 and swap_later_fixed=0.0585 match the V2-locked numbers from the india-us-textiles derived path (see PROJECT_CONTEXT.md \u2014 V2 NUMBERS LOCKED)."
+  },
+  "scenarios": [
+    {"id": "A", "label": "No hedge"},
+    {"id": "B", "label": "Swap now",         "swap_offset_months": 0},
+    {"id": "C", "label": "Swap in 3 months", "swap_offset_months": 3}
+  ],
+  "fixed_rate_rule": "supplied",
+  "fixed_rate_params": {
+    "swap_now_fixed":   0.0502,
+    "swap_later_fixed": 0.0585
+  },
+  "contract_template": {
+    "loan":  {"actus_type": "PAM",   "day_count": "30E360", "payment_cycle": "P3ML1"},
+    "swap":  {"actus_type": "SWAPS", "fixed_leg": "PFL",    "float_leg": "SOFR"}
+  }
+}
