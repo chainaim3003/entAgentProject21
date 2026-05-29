@@ -46,6 +46,12 @@ PAIRS: list[tuple[str, str]] = [
     ("schemas/risk-factor-profile.schema.json",
      "config/risk-factor-profiles/export-import/vietnam-us-textiles.json"),
 
+    # Profile schema -> domestic profiles (Iter-6; least-specific first)
+    ("schemas/risk-factor-profile.schema.json",
+     "config/risk-factor-profiles/domestic/_base_domestic.json"),
+    ("schemas/risk-factor-profile.schema.json",
+     "config/risk-factor-profiles/domestic/us-services.json"),
+
     # Component schema \u2192 every component file
     ("schemas/risk-factor-component.schema.json",
      "config/risk-factor-components/base_sofr_fed_path_linear.json"),
