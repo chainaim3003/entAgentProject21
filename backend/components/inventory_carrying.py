@@ -20,7 +20,7 @@ also keeps `payment_cycle_stress_dso` as "yes" for ecommerce; inventory_carrying
 ADDS to the domestic skeleton rather than replacing payment_cycle.
 
 ────────────────────────────────────────────────────────────────────────────
-CLOSED-FORM CHOICE — ITER-7, *** PENDING USER SIGN-OFF ***
+CLOSED-FORM CHOICE — ITER-7, *** SIGNED OFF (v1 baseline) ***
 ────────────────────────────────────────────────────────────────────────────
 The catalog gives intent ("combines ISR-vs-mean with sector-DIO sensitivity")
 but no closed-form curve over t (month offset). Following the precedent of the
@@ -43,12 +43,18 @@ Iter-6 siblings (demand_volatility / payment_cycle, whose closed forms were
   3. The stress then follows the shared trapezoid (ramp → plateau → descent)
      keyed off inputs.stress_timing, identical to payment_cycle / wc.
 
-This combination is multiplicative and is an Iter-7 modelling decision, not a
-catalog mandate. If the user prefers (a) folding dio_sensitivity into
-sensitivity_bps_per_ratio_point, (b) a one-sided glut-only excess, or (c) a
-DSO/DPO cash-conversion-cycle term to honour the `_dso_dpo` suffix literally,
-this is the single place to change it. Until signed off, treat the 9-point
-numeric vector this produces as ILLUSTRATIVE (see us-ecommerce.json _notes).
+This combination is multiplicative. SIGNED OFF by the user as the Iter-7 v1
+baseline: a lightweight ISR + DIO-sensitive domestic liquidity-stress component
+within the modular additive framework. A fuller CCC-style formulation
+(DIO + DSO − DPO, honouring the `_dso_dpo` suffix literally) is explicitly
+DEFERRED to a future iteration and can be introduced without changing the
+current architecture (same registry signature, same trapezoid, additive merge).
+If that evolution happens, this is the single place to change the form; the
+alternatives once considered were (a) folding dio_sensitivity into
+sensitivity_bps_per_ratio_point, (b) a one-sided glut-only excess, or (c) the
+CCC term above. The 9-point vector us-ecommerce.json produces remains
+ILLUSTRATIVE — not because the form is unsettled (it is signed off) but because
+the profile INPUTS (ISR/PMI/DSO) are synthetic pending live-source binding.
 
 V2 input mapping (PROFILE components[inventory_carrying].inputs):
   inputs.isr_observed                   (current inventory-to-sales ratio; e.g. 1.62)
