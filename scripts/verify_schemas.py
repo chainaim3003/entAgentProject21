@@ -51,6 +51,8 @@ PAIRS: list[tuple[str, str]] = [
      "config/risk-factor-profiles/domestic/_base_domestic.json"),
     ("schemas/risk-factor-profile.schema.json",
      "config/risk-factor-profiles/domestic/us-services.json"),
+    ("schemas/risk-factor-profile.schema.json",
+     "config/risk-factor-profiles/domestic/us-ecommerce.json"),
 
     # Component schema \u2192 every component file
     ("schemas/risk-factor-component.schema.json",

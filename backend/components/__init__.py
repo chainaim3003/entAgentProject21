@@ -29,6 +29,7 @@ from .sovereign import sovereign_trapezoidal
 from .wc import wc_trapezoidal
 from .demand_volatility import demand_volatility_vix_proxy
 from .payment_cycle import payment_cycle_stress_dso
+from .inventory_carrying import inventory_carrying_dso_dpo
 
 # formula_id -> formula function
 COMPONENT_REGISTRY: dict[str, Callable[[dict, "dict | None", float], float]] = {
@@ -38,6 +39,7 @@ COMPONENT_REGISTRY: dict[str, Callable[[dict, "dict | None", float], float]] = {
     "wc_trapezoidal": wc_trapezoidal,
     "demand_volatility_vix_proxy": demand_volatility_vix_proxy,
     "payment_cycle_stress_dso": payment_cycle_stress_dso,
+    "inventory_carrying_dso_dpo": inventory_carrying_dso_dpo,
 }
 
 __all__ = [
@@ -48,4 +50,5 @@ __all__ = [
     "wc_trapezoidal",
     "demand_volatility_vix_proxy",
     "payment_cycle_stress_dso",
+    "inventory_carrying_dso_dpo",
 ]

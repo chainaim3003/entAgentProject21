@@ -1,0 +1,123 @@
+{
+  "$schema": "../../../schemas/risk-factor-profile.schema.json",
+  "profile_id": "us-ecommerce-v1",
+  "version": "1.0.0",
+  "mode": "derived_domestic",
+  "dispatch": "v2_direct",
+  "applies_to": {
+    "mode": "domestic",
+    "industry": "ecommerce"
+  },
+  "_notes": {
+    "purpose": "Second domestic profile (Iter-7). Synthetic US ecommerce / consumer-retail loan scenario. Numerics are ILLUSTRATIVE and pending live-source binding in a later iteration when snapshot pipelines mature. Inherits skeleton + stress_timing from _base_domestic.json via deep merge.",
+    "component_choices": "Components match design-v1-risk-factor-catalog.md \u00a7Component-to-audience-matrix 'Ecommerce' column: base_sofr (always), demand_volatility (core), inventory_carrying (core), wc (yes), payment_cycle (yes). NOTE: the matrix keeps payment_cycle as 'yes' for ecommerce \u2014 inventory_carrying is ADDED to the domestic skeleton, it does NOT replace payment_cycle. This corrects the _base_domestic.json _notes annotation ('substitutes inventory_carrying for payment_cycle'), which read the matrix as a removal; the catalog shows ecommerce keeps both. Post-merge component order is [base_sofr, demand_volatility, payment_cycle, wc, inventory_carrying]: the deep-merge preserves _base_domestic's base order for the 4 shared components and appends inventory_carrying (overlay-only). The composer's _build_sofr_path sums fractions additively, so this order is numerically gauge-safe; it is kept stable by this file.",
+    "no_base_change": "Iter-7 deliberately does NOT add a _base_ecommerce.json (two _base files in domestic/ both with applies_to={mode:domestic} would both classify as the 'base' layer in profile_resolver._scan_candidates -> duplicate-layer error) and does NOT refactor _base_domestic.json (us-services depends on its skeleton). Ecommerce being a superset of the domestic skeleton + inventory_carrying makes both unnecessary. No profile_resolver.py change required.",
+    "industry_choice": "applies_to.industry='ecommerce' is the schema-permitted slot (risk-factor-profile.schema.json applies_to.industry is type:string minLength:1). State.business_identity.mode='domestic_ecommerce' is matched to this profile by profile_resolver's domestic branch (_classify: applies_to.mode=='domestic' + industry=='ecommerce').",
+    "source_strategy": "All source.type='config_file' per Iter-6 Flag-2 resolution (LEGAL_SOURCE_TYPES unchanged \u2014 'snapshot' is NOT a 4th type). source.ref points to fixture paths under backend/tests/fixtures/snapshots/; snapshot_date stamps the reference date. Live API binding scheduled for a later iteration.",
+    "synthetic_values_warning": "PMI / DSO / ISR / sensitivity values below are ILLUSTRATIVE for the Iter-7 composer test. They are NOT sourced from current ISM, Census MRTS, FRED ISRATIO, Atradius, or Intuit releases. base_sofr FED_PATH numbers (4.50/5.50/4.75) DO match the V1 anchor \u2014 the US base rate is shared with US-importer export-import scenarios. The inventory_carrying closed form is an Iter-7 design choice PENDING USER SIGN-OFF (see backend/components/inventory_carrying.py docstring); its 9-point contribution is illustrative until signed off."
+  },
+  "components": [
+    {
+      "name": "base_sofr",
+      "formula_id": "base_sofr_fed_path_linear",
+      "inputs": {
+        "initial": 0.0450,
+        "peak":    0.0550,
+        "final":   0.0475,
+        "months_to_peak": 12,
+        "total_months_assumption": 24
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-fed-path-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "V1 inline FED_PATH (initial 4.50%, peak 5.50%, final 4.75%); the US base rate applies identically to US-domestic and US-importer scenarios. Live binding: FRED SOFR + Fed dot-plot in a later iteration."
+      }
+    },
+    {
+      "name": "demand_volatility",
+      "formula_id": "demand_volatility_vix_proxy",
+      "inputs": {
+        "pmi_neutral":               50.0,
+        "pmi_current":               47.0,
+        "sensitivity_bps_per_point":  4.0,
+        "baseline_bps":               5.0,
+        "decay_months":               6
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-ecommerce-pmi-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "Synthetic Iter-7 fixture (pmi_current=47.0 indicates moderate contraction in consumer-facing demand; pmi_neutral=50.0 PMI convention). Live binding: ISM/S&P Global PMI + Census E-commerce Retail in a later iteration. Formula spec per design-v1-risk-factor-catalog.md \u00a7b.1."
+      }
+    },
+    {
+      "name": "payment_cycle",
+      "formula_id": "payment_cycle_stress_dso",
+      "inputs": {
+        "dso_observed":             45.0,
+        "dso_median":               35.0,
+        "sensitivity_bps_per_day":   1.5,
+        "baseline_bps":              2.0,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-ecommerce-dso-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "Synthetic Iter-7 fixture; observed DSO 45d vs sector median 35d reflects marketplace/B2B ecommerce receivables running longer than card-settled DTC. Live binding: Atradius PPB + Intuit QuickBooks SMB Late Payments in a later iteration. Formula spec per design-v1-risk-factor-catalog.md \u00a7b.5. Matrix keeps payment_cycle as 'yes' for ecommerce."
+      }
+    },
+    {
+      "name": "wc",
+      "formula_id": "wc_trapezoidal",
+      "inputs": {
+        "initial": 0.0030,
+        "peak":    0.0060,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-ecommerce-wc-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "V1 inline WC base (30bps) carried forward; peak bumped to 60bps (illustrative) to reflect higher inventory-financing intensity of ecommerce vs services. Live binding: FRED ISRATIO + sector inventory-to-sales in a later iteration."
+      }
+    },
+    {
+      "name": "inventory_carrying",
+      "formula_id": "inventory_carrying_dso_dpo",
+      "inputs": {
+        "isr_observed":                    1.62,
+        "isr_historic_mean":               1.45,
+        "sensitivity_bps_per_ratio_point": 200.0,
+        "dio_sensitivity":                 1.0,
+        "baseline_bps":                    3.0,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-ecommerce-isr-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "Synthetic Iter-7 fixture; ISR observed 1.62 vs historic mean 1.45 indicates a mild glut (catalog \u00a7b.2: >1.6 = gluts). dio_sensitivity=1.0 placeholder. Live binding: FRED ISRATIO + Census M3/MRTS + ISM Inventories in a later iteration. CORE ecommerce component per design-v1-risk-factor-catalog.md \u00a7Component-to-audience-matrix. Closed form is an Iter-7 design choice PENDING USER SIGN-OFF (see backend/components/inventory_carrying.py)."
+      }
+    }
+  ],
+  "loan_spread_default": 0.025,
+  "tenor_grid": {
+    "kind": "quarterly",
+    "horizon_months": 24,
+    "anchor": "loan_start_date"
+  }
+}
