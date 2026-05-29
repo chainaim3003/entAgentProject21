@@ -1,0 +1,27 @@
+{
+  "$schema_note": "Iter-6 snapshot fixture \u2014 source-of-record for demand_volatility inputs cited by domestic services risk-factor profiles. The profile's source.ref points here; profile inputs MIRROR this file's data block.",
+  "snapshot_id": "us-services-pmi-2026q1",
+  "snapshot_date": "2026-01-31",
+  "component": "demand_volatility",
+  "formula_id": "demand_volatility_vix_proxy",
+  "applies_to_note": "US services sector. pmi_current=48.0 indicates mild contraction (below the 50.0 expansion/contraction threshold).",
+  "source": {
+    "kind": "synthetic_iter6_illustrative",
+    "citation": "Synthetic Iter-6 fixture (pmi_current=48.0 indicates mild contraction; pmi_neutral=50.0 is the PMI convention). Formula spec per design-v1-risk-factor-catalog.md \u00a7b.1.",
+    "retrieval_method": "fabricated for Iter-6 E2E acceptance test; no live pipeline yet",
+    "live_binding_target": "ISM Services PMI monthly release (Iter-7+)"
+  },
+  "data": {
+    "pmi_neutral":               50.0,
+    "pmi_current":               48.0,
+    "sensitivity_bps_per_point":  4.0,
+    "baseline_bps":               5.0,
+    "decay_months":               6
+  },
+  "_meta": {
+    "consumed_by_profiles": ["us-services-v1"],
+    "iteration_authored": "Iter-6",
+    "is_synthetic": true,
+    "license": "internal / not for distribution"
+  }
+}

@@ -33,8 +33,9 @@ This node never raises on a recoverable error; it surfaces honest errors instead
 
 CONTRACT
 ========
-  Reads  state.public_market_context (corridor.origin / corridor.destination /
-                                       gtap_commodity_code)
+  Reads  state.public_market_context
+           export_import: corridor.origin / corridor.destination / gtap_commodity_code
+           domestic:      business_mode / industry  (naics_sector also carried in context)
   Writes state.business_identity
          state.risk_factor_profile_id
          state.resolved_risk_profile
@@ -80,17 +81,29 @@ def _derive_business_identity(public_market_context: dict | None) -> dict:
     files exist yet \u2014 the resolver still scans /domestic/ if asked.
     """
     ctx = public_market_context or {}
-    corridor = ctx.get("corridor") or {}
-    return {
-        "mode": "export_import",
-        "exporter": corridor.get("origin"),
-        "importer": corridor.get("destination"),
-        "commodity_gtap": ctx.get("gtap_commodity_code"),
-    }
+    mode = ctx.get("business_mode") or "export_import"
+    if mode == "export_import":
+        corridor = ctx.get("corridor") or {}
+        return {
+            "mode": "export_import",
+            "exporter": corridor.get("origin"),
+            "importer": corridor.get("destination"),
+            "commodity_gtap": ctx.get("gtap_commodity_code"),
+        }
+    # Domestic fine modes (domestic_services Iter-6; domestic_ecommerce Iter-7).
+    # Coarse audience match happens in _classify via applies_to.industry.
+    return {"mode": mode, "industry": ctx.get("industry")}
 
 
 def _mode_to_dirname(mode: str | None) -> str:
-    """Map state mode (snake_case enum) to filesystem directory (hyphenated)."""
+    """Map state mode (snake_case enum) to filesystem directory (hyphenated).
+
+    Domestic fine modes (domestic_services, domestic_ecommerce) all live under the
+    single coarse 'domestic/' directory — the sector is disambiguated by
+    applies_to.industry inside the files, not by directory.
+    """
+    if (mode or "").startswith("domestic"):
+        return "domestic"
     return (mode or "").replace("_", "-")
 
 
@@ -167,7 +180,20 @@ def _classify(applies_to: dict, identity: dict) -> str | None:
     `mode` must always be explicit in applies_to. Files in a directory have no
     implicit mode \u2014 the content is the truth (avoids path/content coupling).
     """
-    if applies_to.get("mode") != identity.get("mode"):
+    identity_mode = identity.get("mode") or ""
+
+    if identity_mode.startswith("domestic"):
+        if applies_to.get("mode") != "domestic":
+            return None
+        industry = applies_to.get("industry")
+        if industry is None:
+            return "base"                        # _base_domestic.json
+        if industry == identity.get("industry"):
+            return "sector"                      # us-services.json
+        return None
+
+    # export-import arm (unchanged below)
+    if applies_to.get("mode") != identity_mode:
         return None
 
     exp = applies_to.get("exporter")
@@ -217,7 +243,7 @@ def _scan_candidates(identity: dict) -> tuple[list[Path], list[str]]:
         errors.append(f"profile_resolver: profiles directory not found: {rel}")
         return [], errors
 
-    buckets: dict[str, list[Path]] = {"commodity": [], "corridor": [], "base": []}
+    buckets: dict[str, list[Path]] = {"commodity": [], "corridor": [], "sector": [], "base": []}
     for path in sorted(mode_dir.glob("*.json")):
         try:
             with path.open("r", encoding="utf-8") as f:
@@ -240,18 +266,24 @@ def _scan_candidates(identity: dict) -> tuple[list[Path], list[str]]:
                 f"for identity {identity}: {rels}. Expected exactly one."
             )
 
-    # Most-specific first. Skip empty layers.
-    candidates: list[Path] = []
-    for layer in ("commodity", "corridor", "base"):
-        if buckets[layer]:
-            candidates.append(buckets[layer][0])
+    # Most-specific first. Skip empty layers. Layer set + "specific" definition
+    # are mode-aware: export-import uses commodity/corridor; domestic uses sector.
+    is_domestic = (identity.get("mode") or "").startswith("domestic")
+    if is_domestic:
+        layer_order = ("sector", "base")
+    else:
+        layer_order = ("commodity", "corridor", "base")
+    candidates: list[Path] = [buckets[l][0] for l in layer_order if buckets[l]]
 
     # Design rule: _base.json is "defaults; never used alone"
     # (design-v1-config-architecture.md §2). Require at least one specific layer
     # (commodity OR corridor) to match. A base-only match means the identity
     # didn't actually match any concrete profile — surface that as no-match
     # rather than silently shipping a defaults-only profile.
-    has_specific_layer = bool(buckets["commodity"]) or bool(buckets["corridor"])
+    if is_domestic:
+        has_specific_layer = bool(buckets["sector"])
+    else:
+        has_specific_layer = bool(buckets["commodity"]) or bool(buckets["corridor"])
     if candidates and not has_specific_layer:
         candidates = []
 

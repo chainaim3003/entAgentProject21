@@ -1,0 +1,100 @@
+{
+  "$schema": "../../../schemas/risk-factor-profile.schema.json",
+  "profile_id": "us-services-v1",
+  "version": "1.0.0",
+  "mode": "derived_domestic",
+  "dispatch": "v2_direct",
+  "applies_to": {
+    "mode": "domestic",
+    "industry": "services"
+  },
+  "_notes": {
+    "purpose": "First domestic profile (Iter-6). Synthetic US SaaS / professional-services loan scenario \u2014 numerics are illustrative and pending live-source binding in Iter-7+ when snapshot pipelines mature. Components in declared order [base_sofr, demand_volatility, payment_cycle, wc] match design-v1-risk-factor-catalog.md \u00a7Component-to-audience-matrix 'Domestic services' column. Inherits skeleton + stress_timing from _base_domestic.json.",
+    "industry_choice": "applies_to.industry='services' is the schema-permitted slot. State.business_identity.mode='domestic_services' will be matched to this profile by profile_resolver's domestic branch (Iter-6 deliverable 7). NAICS sector 54 (Professional, Scientific, Technical Services) lives in state, not in this profile, since the schema has no naics field.",
+    "source_strategy": "All source.type='config_file' per Iter-6 Flag-2 resolution (LEGAL_SOURCE_TYPES unchanged from Iter-5 \u2014 'snapshot' is NOT added as a 4th type). source.ref points to Iter-6 fixture paths under backend/tests/fixtures/snapshots/; snapshot_date stamps the reference date. Live API binding scheduled for Iter-7+.",
+    "synthetic_values_warning": "PMI / DSO / sensitivity values below are ILLUSTRATIVE for the Iter-6 E2E acceptance test. They are NOT sourced from current ISM, BLS, Atradius, or Intuit releases. Replace with snapshot-pinned real values when those pipelines exist. base_sofr FED_PATH numbers (4.50/5.50/4.75) DO match V1 anchor values \u2014 the US base rate is shared with export-import US-importer scenarios.",
+    "doc_debt_anchor": "Iter-plan \u00a71 Iter-6 acceptance literal text reads source_type:'snapshot'; reconciled here to 'config_file' per Flag-2. Doc-debt fix to iter-plan text lands in Iter-6 deliverable 11."
+  },
+  "components": [
+    {
+      "name": "base_sofr",
+      "formula_id": "base_sofr_fed_path_linear",
+      "inputs": {
+        "initial": 0.0450,
+        "peak":    0.0550,
+        "final":   0.0475,
+        "months_to_peak": 12,
+        "total_months_assumption": 24
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-fed-path-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "V1 inline FED_PATH (initial 4.50%, peak 5.50%, final 4.75%); the US base rate applies identically to US-domestic and US-importer export-import scenarios. Live binding: FRED SOFR + Fed dot-plot in Iter-7+."
+      }
+    },
+    {
+      "name": "demand_volatility",
+      "formula_id": "demand_volatility_vix_proxy",
+      "inputs": {
+        "pmi_neutral":               50.0,
+        "pmi_current":               48.0,
+        "sensitivity_bps_per_point":  4.0,
+        "baseline_bps":               5.0,
+        "decay_months":               6
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-services-pmi-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "Synthetic Iter-6 fixture (pmi_current=48.0 indicates mild contraction; pmi_neutral=50.0 is the PMI convention). Live binding: ISM Services PMI monthly release in Iter-7+. Formula spec per design-v1-risk-factor-catalog.md \u00a7b.1."
+      }
+    },
+    {
+      "name": "payment_cycle",
+      "formula_id": "payment_cycle_stress_dso",
+      "inputs": {
+        "dso_observed":             58.0,
+        "dso_median":               35.0,
+        "sensitivity_bps_per_day":   1.5,
+        "baseline_bps":              2.0,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-services-dso-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "Synthetic Iter-6 fixture; observed DSO 58d vs services-sector median 35d represents late-paying enterprise customers. Live binding: Atradius PPB annual + Intuit QuickBooks SMB Late Payments in Iter-7+. Formula spec per design-v1-risk-factor-catalog.md \u00a7b.5."
+      }
+    },
+    {
+      "name": "wc",
+      "formula_id": "wc_trapezoidal",
+      "inputs": {
+        "initial": 0.0030,
+        "peak":    0.0050,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-services-wc-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "V1 inline WC values (30bps base / 50bps peak) carried forward as illustrative domestic baseline. Live binding: FRED ISRATIO + sector inventory-to-sales in Iter-7+; for services the relevant working-capital driver is closer to payroll/AR cycles than inventory."
+      }
+    }
+  ],
+  "loan_spread_default": 0.025,
+  "tenor_grid": {
+    "kind": "quarterly",
+    "horizon_months": 24,
+    "anchor": "loan_start_date"
+  }
+}

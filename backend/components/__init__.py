@@ -27,6 +27,8 @@ from .base_sofr import base_sofr_fed_path_linear
 from .tariff import tariff_gtap_quadratic
 from .sovereign import sovereign_trapezoidal
 from .wc import wc_trapezoidal
+from .demand_volatility import demand_volatility_vix_proxy
+from .payment_cycle import payment_cycle_stress_dso
 
 # formula_id -> formula function
 COMPONENT_REGISTRY: dict[str, Callable[[dict, "dict | None", float], float]] = {
@@ -34,6 +36,8 @@ COMPONENT_REGISTRY: dict[str, Callable[[dict, "dict | None", float], float]] = {
     "tariff_gtap_quadratic": tariff_gtap_quadratic,
     "sovereign_trapezoidal": sovereign_trapezoidal,
     "wc_trapezoidal": wc_trapezoidal,
+    "demand_volatility_vix_proxy": demand_volatility_vix_proxy,
+    "payment_cycle_stress_dso": payment_cycle_stress_dso,
 }
 
 __all__ = [
@@ -42,4 +46,6 @@ __all__ = [
     "tariff_gtap_quadratic",
     "sovereign_trapezoidal",
     "wc_trapezoidal",
+    "demand_volatility_vix_proxy",
+    "payment_cycle_stress_dso",
 ]

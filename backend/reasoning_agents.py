@@ -115,6 +115,17 @@ Fields (all values must be realistic, plain numbers — NO scientific notation, 
   commodity_hint   — what the loan is financing, free text (e.g. "textile imports from India")
   corridor_hint    — origin->destination trade corridor (e.g. "India to US")
                      If the user says "imports from X", set this to "X to US".
+                     For a US-domestic services/SaaS loan with no cross-border
+                     trade, leave this as an empty string "".
+  business_mode    classify what the loan finances; use EXACTLY one of:
+                     "export_import" = cross-border trade with an origin->destination
+                       corridor (importing/exporting goods).
+                     "domestic_services" = a US-domestic services / SaaS business with
+                       NO cross-border trade corridor.
+                     DEFAULT to "export_import" whenever a trade corridor or imported
+                       commodity is present. Choose "domestic_services" ONLY when the
+                       financing is a domestic US services / SaaS operation with no
+                       cross-border leg.
 """
 
 INTAKE_SCHEMA = {
@@ -127,6 +138,7 @@ INTAKE_SCHEMA = {
         "rate_index": {"type": "string"},
         "commodity_hint": {"type": "string"},
         "corridor_hint": {"type": "string"},
+        "business_mode": {"type": "string"},
     },
 }
 
@@ -212,9 +224,71 @@ MARKET_CONTEXT_SCHEMA = {
 }
 
 
+# Domestic variant (Iter-6): NAICS sector + industry instead of GTAP + corridor.
+MARKET_CONTEXT_DOMESTIC_SYSTEM = """\
+You resolve public market context for a US-DOMESTIC services / SaaS trade-finance
+loan, given the raw extraction from a private loan document. There is NO cross-border
+trade corridor and NO GTAP commodity for a domestic loan; do NOT emit them.
+
+Output JSON only. ALL fields are mandatory:
+  naics_sector      2-digit NAICS sector code best matching the business as a string
+                    (e.g. "54" Professional/Scientific/Technical Services, "51" Information).
+  industry          coarse industry label matching the profile catalog. For services /
+                    SaaS financing use "services".
+  rate_curve_index  forward curve identifier; "USD-SOFR-FORWARD" for USD loans.
+  notes             short free-text rationale.
+
+Make your best inference for each field. Do not return null or skip fields.
+"""
+
+MARKET_CONTEXT_DOMESTIC_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "naics_sector": {"type": "string"},
+        "industry": {"type": "string"},
+        "rate_curve_index": {"type": "string"},
+        "notes": {"type": "string"},
+    },
+    "required": ["naics_sector", "industry", "rate_curve_index"],
+}
+
+
+def _market_context_domestic(raw: dict) -> dict:
+    """N2 domestic arm (Iter-6): resolve NAICS sector + industry.
+
+    Stamps business_mode='domestic_services' into public_market_context as the
+    discriminator profile_resolver reads to bridge fine to coarse identity.
+    """
+    msg = (
+        "Raw extraction from the private (domestic) loan:\n"
+        f"  commodity_hint: {raw.get('commodity_hint')}\n"
+        f"  rate_index:     {raw.get('rate_index')}\n"
+        f"  start_date:     {raw.get('start_date')}\n"
+        f"  term_months:    {raw.get('term_months')}\n"
+        "\nResolve the US-domestic public-data fields per schema (NAICS sector + industry)."
+    )
+    ctx = extract_structured(
+        prompt=msg,
+        response_schema=MARKET_CONTEXT_DOMESTIC_SCHEMA,
+        system_instruction=MARKET_CONTEXT_DOMESTIC_SYSTEM,
+    )
+    ctx["business_mode"] = "domestic_services"
+    summary = (
+        f"resolved domestic NAICS={ctx.get('naics_sector')}, "
+        f"industry={ctx.get('industry')}"
+    )
+    return {
+        "public_market_context": ctx,
+        "audit_log": [_audit_entry("market_context", summary, ctx)],
+    }
+
+
 def market_context_node(state: dict) -> dict:
     """N2 — reasoning (Gemini). Resolve public market context. PUBLIC data enters here."""
     raw = state.get("raw_inputs") or {}
+    if (raw.get("business_mode") or "").startswith("domestic"):
+        return _market_context_domestic(raw)
+
     msg = (
         "Raw extraction from the private loan:\n"
         f"  commodity_hint: {raw.get('commodity_hint')}\n"

@@ -1,0 +1,27 @@
+{
+  "$schema_note": "Iter-6 snapshot fixture \u2014 source-of-record for base_sofr inputs cited by domestic risk-factor profiles. The profile's source.ref points here; profile inputs MIRROR this file's data block.",
+  "snapshot_id": "us-fed-path-2026q1",
+  "snapshot_date": "2026-01-31",
+  "component": "base_sofr",
+  "formula_id": "base_sofr_fed_path_linear",
+  "applies_to_note": "US base rate; universal across US-domestic and US-importer export-import scenarios. Not industry-specific.",
+  "source": {
+    "kind": "v1_anchor",
+    "citation": "V1 inline FED_PATH (initial 4.50%, peak 5.50%, final 4.75%) carried forward. The US base rate applies identically to US-domestic and US-importer export-import scenarios.",
+    "retrieval_method": "manual transcription from V1 SWAPS-1LOAN scenario configs",
+    "live_binding_target": "FRED SOFR series + Fed dot-plot quarterly release (Iter-7+)"
+  },
+  "data": {
+    "initial": 0.0450,
+    "peak":    0.0550,
+    "final":   0.0475,
+    "months_to_peak": 12,
+    "total_months_assumption": 24
+  },
+  "_meta": {
+    "consumed_by_profiles": ["us-services-v1"],
+    "iteration_authored": "Iter-6",
+    "is_synthetic": false,
+    "license": "internal / not for distribution"
+  }
+}

@@ -89,7 +89,7 @@ def _build_provenance_stamp(
             "Agent (later in the graph) stamps source_type='caller_supplied' on "
             "each supplied numeric."
         )
-    elif mode == "derived" and dispatch == "v2_direct":
+    elif mode in ("derived", "derived_domestic") and dispatch == "v2_direct":
         source_summary = (
             "Iteration-6a stamp. SOFR path + swap fixed rates are DERIVED IN V2 from the resolved "
             "profile's component formulas (COMPONENT_REGISTRY) and the hedge spec's "
@@ -171,6 +171,11 @@ def _validate_supplied_block(supplied: Any) -> None:
 
 TENOR_POINTS: int = 9
 TENOR_STEP_MONTHS: int = 3
+# V1_COMPONENT_SUM_ORDER: superseded as of Iter-6. _build_sofr_path now iterates
+# validated_profile['components'] in their declared order, generalizing to
+# derived_domestic profiles whose components differ from V1's 4-tuple.
+# Retained as a documentation anchor for the V1 byte-equality order;
+# remove in a future doc-debt sweep once confirmed unused by external imports.
 V1_COMPONENT_SUM_ORDER: tuple[str, ...] = ("base_sofr", "tariff", "sovereign", "wc")
 
 
@@ -216,16 +221,22 @@ def _component_fraction(component: dict, t: int) -> float:
 
 
 def _build_sofr_path(profile: dict, loan_start: date) -> list[dict]:
-    by_name = {c.get("name"): c for c in (profile.get("components") or [])}
-    missing = [n for n in V1_COMPONENT_SUM_ORDER if n not in by_name]
-    if missing:
-        raise RuntimeError(f"composer_node (v2_direct): profile missing components {missing}; has {sorted(by_name)}.")
+    """Sum component fractions per tenor point, iterating profile['components'] in declared order.
+
+    Order-of-summation note (BYTE-EQUALITY): float addition is associative within rounding error
+    but NOT bit-perfect across orderings. The V1 export-import byte-equality scenario routes
+    through Branch 1 (draps_v1 pass-through) and does NOT exercise this function, so reordering
+    is gauge-safe today. For v2_direct profiles, the profile JSON's declared component order is
+    authoritative; profile authors should keep that order stable across edits to preserve
+    cross-version float reproducibility within a single profile.
+    """
+    components = profile.get("components") or []
     path: list[dict] = []
     for i in range(TENOR_POINTS):
         t = i * TENOR_STEP_MONTHS
         total = 0.0
-        for name in V1_COMPONENT_SUM_ORDER:
-            total = total + _component_fraction(by_name[name], t)
+        for component in components:
+            total = total + _component_fraction(component, t)
         path.append({"time": _iso_midnight(_add_months(loan_start, t)), "value": _round4(total)})
     return path
 
@@ -361,8 +372,8 @@ def composer_node(state: dict) -> dict:
             ],
         }
 
-    # ── Branch 3: Iter-6a derived path (v2_direct — V2 computes SOFR itself) ─
-    if mode == "derived" and dispatch == "v2_direct":
+    # ── Branch 3: Iter-6a v2_direct path — V2 computes SOFR itself (derived + derived_domestic) ─
+    if mode in ("derived", "derived_domestic") and dispatch == "v2_direct":
         components = profile.get("components")
         if not components:
             raise RuntimeError("composer_node: mode='derived' dispatch='v2_direct' but the resolved profile "
@@ -388,9 +399,9 @@ def composer_node(state: dict) -> dict:
     # ── Honest failure for any unsupported (mode, dispatch) combination ─────
     raise NotImplementedError(
         f"Composer supports:\n"
-        f"  mode='derived'  + dispatch='draps_v1'   (Iteration 1)\n"
-        f"  mode='supplied' + dispatch='draps_v1'   (Iteration 3)\n"
-        f"  mode='derived'  + dispatch='v2_direct'  (Iteration 6a)\n"
-        f"Got mode={mode!r}, dispatch={dispatch!r}.\n"
-        f"mode='derived_domestic' lands in a later iteration."
+        f"  mode='derived'           + dispatch='draps_v1'   (Iteration 1)\n"
+        f"  mode='supplied'          + dispatch='draps_v1'   (Iteration 3)\n"
+        f"  mode='derived'           + dispatch='v2_direct'  (Iteration 6a)\n"
+        f"  mode='derived_domestic'  + dispatch='v2_direct'  (Iteration 6)\n"
+        f"Got mode={mode!r}, dispatch={dispatch!r}."
     )
