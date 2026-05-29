@@ -133,7 +133,7 @@ Three things are true for every iteration on this list:
 **Acceptance:**
 - Synthetic US SaaS loan → recommendation runs end-to-end.
 - Recommendation rationale (from N5) does **not** mention tariff, sovereign, or commodity.
-- Provenance report shows `source_type: "snapshot"` with snapshot dates.
+- Provenance report shows `source_type: "config_file"` with `snapshot_date` stamps (refs point to snapshot files under `backend/tests/fixtures/snapshots/`). Note: `snapshot` is deliberately NOT a fourth source_type — the legal set stays {`config_file`, `api`, `caller_supplied`} per Iteration 5; snapshot provenance is expressed as a `config_file` source with a snapshot-dated ref (Flag-2 resolution).
 - Byte-equality and all previous tests green.
 
 **Demo:** SaaS treasurer prompt → A/B/C with no tariff term, with explanation phrased in "demand volatility / payment cycle" vocabulary.
