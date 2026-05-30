@@ -120,6 +120,8 @@ Three things are true for every iteration on this list:
 ---
 
 ### ITERATION 6 — Domestic Services (Problem C, slice 1)
+**STATUS:** shipped 2026-05-28 — us-services-v1; +8 tests (Iter-6 section of `test_composer_derived_domestic.py`); byte-equality expected green (confirm on regression run).
+**STATUS (Iteration 6a — v2_direct dispatch foundation, shipped before Iter-6):** shipped 2026-05-28 — first V2-internal SOFR derivation path; `test_simulation_v2_direct.py` (10 tests, ACTUS monkeypatched).
 **Goal:** smallest possible domestic-mode end-to-end. Pick services first because it needs the fewest new components.
 
 **Build:**
@@ -141,6 +143,7 @@ Three things are true for every iteration on this list:
 ---
 
 ### ITERATION 7 — Domestic Ecommerce (Problem C, slice 2)
+**STATUS:** shipped 2026-05-29 — us-ecommerce-v1; +9 tests (Iter-7 section of `test_composer_derived_domestic.py`, same file); `inventory_carrying` SIGNED OFF v1 baseline.
 **Goal:** the consumer-facing case — adds inventory-cycle dynamics.
 
 **Build:**
@@ -157,6 +160,7 @@ Three things are true for every iteration on this list:
 ---
 
 ### ITERATION 8 — First Live Data Binding (FRED)
+**STATUS:** shipped 2026-05-29 — `us-services-live-v1` live FRED/SOFR hybrid bind (`base_sofr.initial` from FRED `SOFR`; peak/final declared); `test_honest_failure.py` (9 tests, FRED HTTP monkeypatched); full regression 260 PASSED (Iter-5 base 224 + 6a/6/7/8 = +36), byte-equality 6/6 green, schema 15/15 (verified 2026-05-29 Windows-side).
 **Goal:** one real API, end-to-end, with honest failure on outage.
 
 **Build:**
@@ -275,9 +279,10 @@ This shows which tests are added per iteration and which carry forward. Every it
 | 3 | `test_composer_supplied` | 9 |
 | 4 | `test_composer_derived` (parametrised), `test_no_silent_default` | 11 |
 | 5 | `test_provenance_invariant` | 12 |
-| 6 | `test_composer_derived_domestic`, new `test_components_unit` cases | 13 |
-| 7 | extended `test_composer_derived_domestic` | 13 |
-| 8 | `test_honest_failure` (FRED-outage scenario) | 14 |
+| 6a | `test_simulation_v2_direct` (10 tests; v2_direct dispatch foundation, shipped before Iter-6) | 13 |
+| 6 | `test_composer_derived_domestic` (Iter-6 section, 8 tests) — *planned `test_components_unit` never implemented; `demand_volatility` & `payment_cycle` covered via composer integration tests* | 14 |
+| 7 | `test_composer_derived_domestic` EXTENDED (Iter-7 section, +9 tests, incl. 3 `inventory_carrying` unit tests) | 14 |
+| 8 | `test_honest_failure` (9 tests; FRED hybrid-bind + honest-failure) | 15 |
 | 9 | extended `test_honest_failure` (Census/BLS) | 14 |
 | 10 | JP-profile end-to-end test | 15 |
 | 11 | IN-profile end-to-end test | 16 |

@@ -1,0 +1,106 @@
+{
+  "$schema": "../../../schemas/risk-factor-profile.schema.json",
+  "profile_id": "us-services-live-v1",
+  "version": "1.0.0",
+  "mode": "derived_domestic",
+  "dispatch": "v2_direct",
+  "applies_to": {
+    "mode": "domestic",
+    "industry": "services-live"
+  },
+  "_notes": {
+    "purpose": "Iter-8 LIVE-DATA variant of us-services.json. Identical in every respect EXCEPT base_sofr.source, which is bound to FRED SOFR at runtime (source.type='api') instead of the static Iter-6 snapshot. This is the first live FRED bind target. It is a SEPARATE profile (distinct applies_to.industry='services-live') rather than an in-place edit of us-services.json, because the Iter-6/7 regression tests (test_composer_derived_domestic.py) resolve us-services.json through the real profile_resolver and must stay OFFLINE-deterministic per the Iter-8 acceptance ('offline regression tests continue to use snapshots'). Flipping the shipped snapshot profile to hard-live would make CI network-dependent. A treasurer wanting live rates selects industry='services-live'; CI and offline runs keep industry='services'.",
+    "hybrid_transform": "HYBRID binding (Iter-8 agreed scope): base_sofr.initial is bound LIVE from FRED SOFR latest observation; peak and final remain profile-DECLARED (the V1 anchor 5.50%/4.75%). A Fed dot-plot source for the forward points (peak/final) is a later iteration. The api_binding layer writes only inputs.initial; peak/final/months_to_peak/total_months_assumption stay exactly as declared below and still pass N3c's inputs_schema cross-file check.",
+    "cache_policy_location": "cache_policy lives INSIDE base_sofr.source (source is a free-form object in risk-factor-profile.schema.json \u2014 no additionalProperties:false on it), so this needs NO schema change. N3c profile_spec_validator does not inspect source at all; it validates inputs against the component inputs_schema, and the live-bound inputs.initial (a real SOFR fraction ~0.04) sits well inside base_sofr's [-0.05, 0.30] bound.",
+    "cache_policy_choice": "mode='cached_within_days', max_age_days=4. SOFR publishes on US business days; a 4-day window tolerates a long weekend / holiday gap while still refusing genuinely stale data. On a FRED outage, api_binding falls back to the most recent cached snapshot IF it is within 4 days and stamps freshness='stale, as of <date>'; beyond 4 days (or no snapshot) it is an honest GIVE-UP. To require always-fresh instead, set mode='refresh_on_run' (then ANY outage is an immediate GIVE-UP).",
+    "offline_warning": "Resolving THIS profile triggers a live FRED call inside profile_resolver (the api binding step). It is NOT safe for offline CI. The honest-failure test (test_honest_failure.py) exercises the binding with the HTTP layer monkeypatched, never hitting the network. The live smoke test runs on the user's Windows host (api.stlouisfed.org is not in the sandbox allow-list).",
+    "non_base_sofr_components": "demand_volatility, payment_cycle, wc are IDENTICAL to us-services.json (still config_file/snapshot). Iter-8 binds ONLY FRED/SOFR; Census/BLS bindings for those components are Iter-9. Held identical so the only behavioural difference vs us-services.json is the live base_sofr.initial."
+  },
+  "components": [
+    {
+      "name": "base_sofr",
+      "formula_id": "base_sofr_fed_path_linear",
+      "inputs": {
+        "initial": 0.0450,
+        "peak":    0.0550,
+        "final":   0.0475,
+        "months_to_peak": 12,
+        "total_months_assumption": 24
+      },
+      "source": {
+        "type": "api",
+        "provider": "FRED",
+        "series_id": "SOFR",
+        "binds": "initial",
+        "cache_policy": {
+          "mode": "cached_within_days",
+          "max_age_days": 4
+        },
+        "citation": "FRED series SOFR (Federal Reserve Bank of New York, retrieved from FRED), latest observation, bound to base_sofr.initial at runtime. peak/final remain the declared V1 anchor pending a Fed dot-plot source (later iteration). The declared inputs.initial=0.0450 above is the offline DECLARED fallback value and the seed for the inputs_schema check; it is OVERWRITTEN by the live FRED value when binding succeeds."
+      }
+    },
+    {
+      "name": "demand_volatility",
+      "formula_id": "demand_volatility_vix_proxy",
+      "inputs": {
+        "pmi_neutral":               50.0,
+        "pmi_current":               48.0,
+        "sensitivity_bps_per_point":  4.0,
+        "baseline_bps":               5.0,
+        "decay_months":               6
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-services-pmi-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "Identical to us-services.json. Live ISM Services PMI binding is Iter-9. Formula spec per design-v1-risk-factor-catalog.md \u00a7b.1."
+      }
+    },
+    {
+      "name": "payment_cycle",
+      "formula_id": "payment_cycle_stress_dso",
+      "inputs": {
+        "dso_observed":             58.0,
+        "dso_median":               35.0,
+        "sensitivity_bps_per_day":   1.5,
+        "baseline_bps":              2.0,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-services-dso-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "Identical to us-services.json. Live Atradius/Intuit binding is Iter-9. Formula spec per design-v1-risk-factor-catalog.md \u00a7b.5."
+      }
+    },
+    {
+      "name": "wc",
+      "formula_id": "wc_trapezoidal",
+      "inputs": {
+        "initial": 0.0030,
+        "peak":    0.0050,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-services-wc-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "Identical to us-services.json. Live FRED ISRATIO binding is Iter-9."
+      }
+    }
+  ],
+  "loan_spread_default": 0.025,
+  "tenor_grid": {
+    "kind": "quarterly",
+    "horizon_months": 24,
+    "anchor": "loan_start_date"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "$schema_note": "Iter-9 backfill snapshot fixture (see us-ecommerce-pmi-2026q1.json note). Source-of-record for wc inputs cited by domestic ecommerce profiles. The profile's source.ref points here; profile inputs MIRROR this file's data block.",
+  "snapshot_id": "us-ecommerce-wc-2026q1",
+  "snapshot_date": "2026-01-31",
+  "component": "wc",
+  "formula_id": "wc_trapezoidal",
+  "applies_to_note": "US ecommerce. V1 inline WC base (30bps) carried forward; peak bumped to 60bps (illustrative) for the higher inventory-financing intensity of ecommerce vs services.",
+  "source": {
+    "kind": "synthetic_iter7_illustrative",
+    "citation": "V1 inline WC base (30bps) carried forward; peak 60bps illustrative.",
+    "retrieval_method": "carried from V1 / fabricated for the Iter-7 composer test. STAYS snapshot in Iter-9: wc_trapezoidal inputs are output bps, not a market observable, so there is no input to bind.",
+    "live_binding_target": "NONE via direct bind. A derivation from FRED ISRATIO into wc bps is out of Iter-9 scope (flagged: profile annotations elsewhere label it Iter-9 work, conflicting with the carried scope decision)."
+  },
+  "data": {
+    "initial": 0.0030,
+    "peak":    0.0060,
+    "stress_timing": {
+      "months_to_peak": 12,
+      "plateau_months":  3,
+      "descent_months":  9
+    }
+  },
+  "_meta": {
+    "consumed_by_profiles": ["us-ecommerce-v1", "us-ecommerce-live-v1"],
+    "iteration_authored": "Iter-9 (backfill; values mirror us-ecommerce.json Iter-7 inline inputs)",
+    "is_synthetic": true,
+    "license": "internal / not for distribution"
+  }
+}

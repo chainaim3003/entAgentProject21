@@ -34,6 +34,11 @@ from .inventory_carrying import inventory_carrying_dso_dpo
 # formula_id -> formula function
 COMPONENT_REGISTRY: dict[str, Callable[[dict, "dict | None", float], float]] = {
     "base_sofr_fed_path_linear": base_sofr_fed_path_linear,
+    # Iter-10 ALIAS: BoJ-provider base-SOFR path. The math is provider-agnostic
+    # (pure linear interpolation over initial/peak/final — see base_sofr.py), so
+    # the JP profile reuses the SAME function under a distinct formula_id. The
+    # provider split (FRED vs BoJ) lives in api_binding._BINDABLE, not the math.
+    "base_sofr_boj_path_linear": base_sofr_fed_path_linear,
     "tariff_gtap_quadratic": tariff_gtap_quadratic,
     "sovereign_trapezoidal": sovereign_trapezoidal,
     "wc_trapezoidal": wc_trapezoidal,

@@ -54,6 +54,15 @@ PAIRS: list[tuple[str, str]] = [
     ("schemas/risk-factor-profile.schema.json",
      "config/risk-factor-profiles/domestic/us-ecommerce.json"),
 
+    # Profile schema -> live-data domestic variants (Iter-8 services-live;
+    # Iter-9 ecommerce-live). Same profile schema; only component sources differ
+    # (source.type='api'). us-services-live was authored in Iter-8 but never
+    # added to PAIRS until now.
+    ("schemas/risk-factor-profile.schema.json",
+     "config/risk-factor-profiles/domestic/us-services-live.json"),
+    ("schemas/risk-factor-profile.schema.json",
+     "config/risk-factor-profiles/domestic/us-ecommerce-live.json"),
+
     # Component schema \u2192 every component file
     ("schemas/risk-factor-component.schema.json",
      "config/risk-factor-components/base_sofr_fed_path_linear.json"),

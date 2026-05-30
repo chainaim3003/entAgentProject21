@@ -1,0 +1,31 @@
+{
+  "$schema_note": "Iter-9 backfill snapshot fixture (see us-ecommerce-pmi-2026q1.json note). Source-of-record for payment_cycle inputs cited by domestic ecommerce profiles. The profile's source.ref points here; profile inputs MIRROR this file's data block.",
+  "snapshot_id": "us-ecommerce-dso-2026q1",
+  "snapshot_date": "2026-01-31",
+  "component": "payment_cycle",
+  "formula_id": "payment_cycle_stress_dso",
+  "applies_to_note": "US ecommerce. Observed DSO 45d vs sector median 35d reflects marketplace/B2B ecommerce receivables running longer than card-settled DTC.",
+  "source": {
+    "kind": "synthetic_iter7_illustrative",
+    "citation": "Synthetic Iter-7 fixture; DSO 45d vs median 35d. Formula spec per design-v1-risk-factor-catalog.md b.5.",
+    "retrieval_method": "fabricated for the Iter-7 composer test; no live pipeline. STAYS snapshot in Iter-9 (dso_observed sources are FREE REPORTS, not REST APIs).",
+    "live_binding_target": "NONE via API. Atradius PPB / Intuit QuickBooks / Fed SBCS / JPMC Institute are free annual reports per design-v1-free-apis.md s6 (manual calibration, not a live bind)."
+  },
+  "data": {
+    "dso_observed":             45.0,
+    "dso_median":               35.0,
+    "sensitivity_bps_per_day":   1.5,
+    "baseline_bps":              2.0,
+    "stress_timing": {
+      "months_to_peak": 12,
+      "plateau_months":  3,
+      "descent_months":  9
+    }
+  },
+  "_meta": {
+    "consumed_by_profiles": ["us-ecommerce-v1", "us-ecommerce-live-v1"],
+    "iteration_authored": "Iter-9 (backfill; values mirror us-ecommerce.json Iter-7 inline inputs)",
+    "is_synthetic": true,
+    "license": "internal / not for distribution"
+  }
+}

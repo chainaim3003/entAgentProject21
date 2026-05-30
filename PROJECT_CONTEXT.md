@@ -26,13 +26,16 @@ hedgeAdvisor2/
 |  +- provenance.py                      # N6a (Iter-5 FULL I7 invariant; raises on miss)
 |  +- draps_client.py                    # DRAPS HTTP; Iter-5 surfaces SOFR+fixed rates
 |  +- deterministic_agents.py            # N3 input validator, N4 simulation, etc.
-|  +- components/                        # base_sofr.py, tariff.py, sovereign.py, wc.py
+|  +- components/                        # base_sofr, tariff, sovereign, wc, demand_volatility, payment_cycle (Iter-6), inventory_carrying (Iter-7)
+|  +- data_sources/                       # Iter-8: fred_client.py, snapshot_cache.py, api_binding.py (live FRED/SOFR bind)
 |  +- draps-backend/                     # DRAPS V1 server (npm run server, port 4000)
 |  +- tests/
 |     +- test_api_supplied.py            # Iter-3 (12)
 |     +- test_byte_equality_v1.py        # THE LOCK (6) - live DRAPS+ACTUS
 |     +- test_composer_derived.py        # Iter-4 (22, parametrised over IN+VN)
 |     +- test_composer_supplied.py       # Iter-3 (25)
+|     +- test_composer_derived_domestic.py    # Iter-6 (8) + Iter-7 (9) - same file, banner-sectioned
+|     +- test_honest_failure.py          # Iter-8 (9; CI-safe, FRED HTTP monkeypatched)
 |     +- test_draps_client_extract.py    # Iter-5 (31; SOFR+rate extractors)
 |     +- test_knot.py                    # V1 carried forward
 |     +- test_no_silent_default.py       # Iter-4 (7)
@@ -42,6 +45,7 @@ hedgeAdvisor2/
 |     +- test_provenance_invariant.py    # Iter-5 (50; I7 enforcement)
 |     +- test_provenance_supplied.py     # Iter-3 (18; rewritten for Iter-5 raise contract)
 |     +- test_simulation_supplied.py     # Iter-3 (9)
+|     +- test_simulation_v2_direct.py    # Iter-6a (10; ACTUS monkeypatched)
 |     +- test_wings.py                   # V1 carried forward
 +- config/
 |  +- hedge-specs/
@@ -54,6 +58,11 @@ hedgeAdvisor2/
 |  |     +- india-us-textiles.json       # commodity leaf (IN-tex; byte-equality anchor)
 |  |     +- vietnam-us.json              # corridor layer (VN) - Iter-4
 |  |     +- vietnam-us-textiles.json     # commodity leaf (VN-tex) - Iter-4
+|  |  +- domestic/                       # Iter-6/7/8 derived_domestic profiles
+|  |     +- _base_domestic.json           # base layer (Iter-6)
+|  |     +- us-services.json              # us-services-v1 (Iter-6)
+|  |     +- us-ecommerce.json             # us-ecommerce-v1 (Iter-7)
+|  |     +- us-services-live.json         # us-services-live-v1 (Iter-8; live FRED bind on base_sofr.initial)
 |  +- risk-factor-components/            # 4 component spec JSONs
 |  +- gtap-references/
 |     +- armington-elasticities.json     # Iter-4 (first entry: tex=3.8)
@@ -177,6 +186,46 @@ Also run `python ../scripts/verify_schemas.py` -> expect **12/12 passed** (no sc
 
 ---
 
+### Iteration 6a — v2_direct Dispatch (foundation for domestic) ✅ SHIPPED (2026-05-28)
+First V2-internal SOFR derivation path. `simulation_node` gains a `v2_direct` branch + `actus_client.run_v2_direct`: when the composer ran `dispatch='v2_direct'` (mode `derived`/`derived_domestic`) and stamped `knot_payload['v2_direct']`, the node derives A/B/C by building scenario batches and POSTing each to ACTUS `/eventsBatch` — short-circuiting BEFORE the draps_v1 path (DRAPS not called). Aggregation replicates `DATA/SWAPS-1LOAN-WHAT-IF-DEMO.json`: A = abs ΣIP(loan); B = abs IP(LOAN-FLOAT-B) − signed IP(SWAP-NOW-B); C = abs IP(LOAN-FLOAT-C) − signed IP(SWAP-LATER-C). Non-IP events (IED/MD/RR) excluded. Loan PAM `nominalInterestRate = _to_fixed4(sofr0 + loan_spread)`; scenario-C FLOAT leg picks SOFR @ swap_start (loan_start + 3mo), NOT `sofr_path[0]`. The `validated_inputs` wiring guard still fires first.
+**Deliverable:** `backend/tests/test_simulation_v2_direct.py` (10 tests, CI-safe, ACTUS monkeypatched). Resolves the Iter-4/5 "v2_direct deferred" open item. **Test count: 10** (verified by full read; none parametrised).
+
+---
+
+### Iteration 6 — Domestic Services (Problem C, slice 1) ✅ SHIPPED (2026-05-28)
+Smallest domestic-mode end-to-end (services). **Resolver domestic arm:** `_classify` / `_scan_candidates` domestic branch; `_derive_business_identity` now reads `business_mode + industry` only (`naics_sector` / `rate_curve_index` inert). Resolves `us-services.json` (sector) over `_base_domestic.json` (base) → `profile_id='us-services-v1'`, `mode='derived_domestic'`, `dispatch='v2_direct'`, `applies_to={mode:domestic, industry:services}`. **Composer Branch 3** (`derived_domestic` + `v2_direct`): `_build_sofr_path` sums 4 components `[base_sofr, demand_volatility, payment_cycle, wc]` over a 9-point quarterly grid (`TENOR_POINTS=9`, `STEP=3mo` from loan start); `_apply_fixed_rate_rule('discount_from_path')` → `swap_now = round4(sofr@+0 − 100bps)`, `swap_later = round4(sofr@+3 − 70bps)` using `_default.json` discounts. Provenance stamp: `derived_domestic`/`v2_direct`, config_file sourcing, `hedge_spec_id='default-3-scenario'`.
+**Config detail (verified):** `us-services.json` carries `base_sofr` at the V1 FED_PATH anchor (initial 4.50% / peak 5.50% / final 4.75%), `demand_volatility` `pmi_current=48.0` (vs `pmi_neutral=50.0`), `payment_cycle` `dso_observed=58` vs `dso_median=35`, `wc` 30→50 bps; `loan_spread_default=0.025`; `tenor_grid` quarterly / 24-month / anchored at `loan_start_date`. **All `source.type='config_file'`** (Flag-2 resolution: `LEGAL_SOURCE_TYPES` was NOT extended with a 4th `'snapshot'` type) with `source.ref` → `tests/fixtures/snapshots/us-services-*-2026q1.json`, `snapshot_date='2026-01-31'`. `_base_domestic.json` holds the shared 4-component skeleton + 12/3/9 `stress_timing` + 250bps default spread.
+**Deliverables:** `components/demand_volatility.py` + `payment_cycle.py` (NEW; closed forms, docstrings "signed off by user"); `config/risk-factor-profiles/domestic/us-services.json` + `_base_domestic.json` (NEW); `backend/tests/test_composer_derived_domestic.py` (NEW, Iter-6 section = 8 tests).
+**KEY DECISION:** Iter-6 tests assert STRUCTURE / relationships, NOT frozen absolute 9-point values — `us-services.json` inputs are ILLUSTRATIVE pending live-source binding. **DOC-DEBT (carried, plan doc only):** the plan §1 Iter-6 acceptance literal text reads `source_type:'snapshot'`; reconciled to `config_file` per Flag-2 — the fix to the *plan doc* text is "Iter-6 deliverable 11" and is still pending (plan doc not edited this session). **Test count (Iter-6 section): 8** (verified by full read).
+
+---
+
+### Iteration 7 — Domestic Ecommerce (Problem C, slice 2) ✅ SHIPPED (2026-05-29)
+Consumer-facing domestic case; adds inventory-cycle dynamics; still snapshot/illustrative-input mode. `us-ecommerce.json` (`'us-ecommerce-v1'`) resolves through the SAME domestic arm + Branch 3, selecting the catalog 'Ecommerce' column `[base_sofr, demand_volatility, payment_cycle, wc, inventory_carrying]`. `inventory_carrying` is **overlay-only** (appended via deep-merge); `payment_cycle` is **RETAINED** (not substituted); NO `_base` change, NO resolver change, NO `_base_ecommerce.json` (a second `applies_to={mode:domestic}` base file would collide on the base layer). New component `inventory_carrying.py` (`formula_id inventory_carrying_dso_dpo`): `abs(ISR − historic_mean)` (gluts AND stockouts both widen WC), `peak_bps = baseline + dev*sensitivity*dio_sensitivity`, shared trapezoid.
+**Config detail (verified):** `inventory_carrying` inputs `isr_observed=1.62`, `isr_historic_mean=1.45`, `sensitivity_bps_per_ratio_point=200`, `dio_sensitivity=1.0` (placeholder), `baseline_bps=3.0`; `demand_volatility` `pmi_current=47.0`; `payment_cycle` `dso_observed=45`; `wc` peak bumped to 60bps (vs 50 for services). `_base_domestic.json`'s `_notes` was reconciled (it no longer claims ecommerce "substitutes inventory_carrying for payment_cycle"; the matrix keeps both).
+**Deliverables:** `components/inventory_carrying.py` (NEW); `config/risk-factor-profiles/domestic/us-ecommerce.json` (NEW); `test_composer_derived_domestic.py` EXTENDED (+9 tests: ecommerce resolver/composer/provenance/audit + 3 `inventory_carrying` unit tests locking baseline floor / glut-stockout symmetry / peak formula).
+**KEY DECISIONS:** numeric vector still NOT frozen (illustrative inputs); unit tests lock FORM not magnitudes. `inventory_carrying` v1 baseline is **SIGNED OFF** (user-confirmed this session); the fuller CCC form (DIO+DSO−DPO) is deferred without architecture change. The stale "PENDING USER SIGN-OFF" note in the test file is to be corrected to reflect sign-off. **Test count (Iter-7 addition): 9** (verified by full read).
+
+---
+
+### Iteration 8 — Live FRED/SOFR Binding (Option A) ✅ SHIPPED (2026-05-29)
+First live external-data bind. `us-services-live.json` (`'us-services-live-v1'`, `applies_to.industry='services-live'`) is a SEPARATE profile (not an in-place edit of `us-services.json`) so the Iter-6/7 offline regression stays deterministic — a treasurer selects `industry='services-live'` for live rates; CI/offline keep `industry='services'`. **HYBRID bind:** `base_sofr.initial` is bound LIVE from FRED `SOFR` latest observation (`source.type='api'`, `provider='FRED'`, `series_id='SOFR'`, `binds='initial'`); `peak`/`final` remain the declared V1 anchor (5.50%/4.75%) pending a Fed dot-plot source. `cache_policy` (`mode='cached_within_days'`, `max_age_days=4`) lives INSIDE `base_sofr.source` (free-form object → no schema change). `demand_volatility`/`payment_cycle`/`wc` are IDENTICAL to `us-services.json` (still config_file; Census/BLS bindings are Iter-9). New package `backend/data_sources/{fred_client,snapshot_cache,api_binding}.py`. `profile_resolver` gained `needs_key` lazy-config decoupling (offline path imports no api component → no config import).
+**Deliverable:** `backend/tests/test_honest_failure.py` — all CI-safe (offline path via `needs_key` decoupling; api-path tests monkeypatch `_fred_api_key` via `patch_key` or bypass the node).
+**STILL PENDING SIGN-OFF (user, carried):** `us-services-live.json` as a SPLIT vs flipping `us-services.json` in place; `cache_policy max_age_days=4` as the SOFR staleness window. **STILL OWED (user, cannot run from sandbox — no Windows exec, FRED not allow-listed):** live FRED smoke (real `FRED_API_KEY` in `backend/.env`, resolve `industry='services-live'`, confirm `base_sofr.inputs.initial == live SOFR fraction` and `source.binding_result.freshness == "live"`).
+**Test count: 9** (verified — full regression run 2026-05-29 confirms 9/9 in `test_honest_failure.py`). **STATUS: shipped 2026-05-29 — full regression 260 PASSED, byte-equality 6/6 green (run live with DRAPS+ACTUS up). Cumulative = Iter-5 base 224 + 6a 10 + Iter-6 8 + Iter-7 9 + Iter-8 9 = 260; no regression — `test_no_silent_default.py`'s 2 rewritten v2_direct composer tests pass, so the 224 base is intact under shipped v2_direct. Schema check now 15/15 (Iter-6/7 added the 3 domestic profiles to verify_schemas PAIRS).**
+
+---
+
+### Iteration 9 - Live FRED ISRATIO bind (inventory_carrying) ✅ SHIPPED (2026-05-30)
+Second live external-data bind. SCOPE COLLAPSED during scoping (evidence-based against `design-v1-risk-factor-catalog.md` + `design-v1-free-apis.md` + the profile JSONs): the ONLY Iter-9-bindable component beyond the Iter-8 SOFR bind is `inventory_carrying.isr_observed` -> FRED `ISRATIO`. `us-ecommerce-live.json` (`'us-ecommerce-live-v1'`, `applies_to.industry='ecommerce-live'`) is a SEPARATE profile (same split rationale as `us-services-live.json`): clones `us-ecommerce.json` and flips TWO component sources to `source.type='api'` - `base_sofr.initial` <- FRED `SOFR` (cache `max_age_days=4`, same hybrid bind as Iter-8) and `inventory_carrying.isr_observed` <- FRED `ISRATIO` (cache `max_age_days=45`, monthly series). `demand_volatility`/`payment_cycle`/`wc` stay `config_file`/snapshot. CI/offline keep `industry='ecommerce'`.
+**Binding mechanics (verified in code):** `fred_client.fetch_latest_sofr` gained a keyword-only `value_scale` param; `api_binding._BINDABLE` is now `formula_id -> (field, provider, series_id, value_scale)` with `base_sofr_fed_path_linear -> ("initial","FRED","SOFR",0.01)` and `inventory_carrying_dso_dpo -> ("isr_observed","FRED","ISRATIO",1.0)`. ISRATIO is a RATIO, bound AS-IS with `value_scale=1.0` (NOT the 0.01 percent-rate scaling - binding ~0.0145 instead of ~1.45 would be the bug). Provider/series_id are read from `_BINDABLE` keyed by `formula_id`, NOT from `source.provider`; the `provider != "FRED"` guard rejects any future non-FRED entry with an honest "not wired" error (Census/BLS deferred).
+**SCOPE DECISIONS (locked, evidence-grounded):** (1) `census_client.py` DEFERRED - Census MRTS query/field shape unverifiable from sandbox (api.census.gov unreachable). (2) `bls_client.py` DEFERRED - no Iter-9 component consumes a BLS series. (3) `demand_volatility.pmi_current` STAYS SNAPSHOT - no free PMI REST API. (4) `payment_cycle.dso_observed` STAYS SNAPSHOT - Atradius/Intuit/Fed SBCS/JPMC are free REPORTS, not APIs. (5) `wc_trapezoidal` OUT - inputs are output bps, no market observable. (6) `config/corridor-references/` folder NOT created (carried, see open items).
+**Deliverables:** `backend/data_sources/fred_client.py` + `api_binding.py` EDITED (value_scale + ISRATIO `_BINDABLE` entry); `config/risk-factor-profiles/domestic/us-ecommerce-live.json` (NEW); `backend/tests/fixtures/snapshots/us-ecommerce-{pmi,dso,wc,isr}-2026q1.json` (NEW - referenced by us-ecommerce.json since Iter-7 but never on disk); `backend/tests/test_honest_failure.py` EXTENDED (+5 Iter-9 tests, NO new file); `scripts/verify_schemas.py` PAIRS +2 (`us-ecommerce-live.json` AND `us-services-live.json` - the latter a carried Iter-8 gap, never added in Iter-8).
+**STILL PENDING SIGN-OFF / OWED (user, carried):** (a) wc Iter-9 in/out conflict - `us-services-live.json` _notes and `us-ecommerce.json` wc citation both label the ISRATIO->wc bind as Iter-9, contradicting the locked decision to keep wc OUT; built OUT, user to confirm/override. (b) `inventory_carrying` cache `max_age_days=45` sign-off (monthly ISRATIO; SOFR's 4 would reject every fallback). (c) SMOKE: `series_id="ISRATIO"` magnitude - FRED's literal ISRATIO is Total-Business inv/sales (~1.37); docs describe Retailers' ratio (~1.45); verify on real-key smoke, swap series_id if retailers'-specific intended (NOT guessed here). (d) carried Iter-8 live FRED/SOFR smoke + the Iter-8 split/cache sign-offs still owed.
+**Test count (Iter-9 addition to `test_honest_failure.py`): +5** (`test_isr_live_success_binds_as_ratio_value_scale_one` [value_scale regression guard], `test_isr_outage_no_cache_gives_up`, `test_isr_outage_overage_cache_gives_up`, `test_isr_outage_within_45d_uses_stale_and_stamps_it`, `test_non_fred_provider_not_wired`). `test_honest_failure.py` now 14. **STATUS: shipped 2026-05-30 - full regression 265 PASSED, byte-equality 6/6 green (run live with DRAPS+ACTUS up, Windows-side). Cumulative = Iter-8 260 + Iter-9 5 = 265. Schema check now 17/17 (added both live profiles to verify_schemas PAIRS). Live external smoke (real FRED key against api.stlouisfed.org) still owed - the regression monkeypatches the HTTP layer, exactly as Iter-8.**
+
+---
+
 ## 6. Open items (preserve across iterations)
 
 1. **TOP PRIORITY when end-to-end supplied mode is needed: DRAPS bridge for supplied SOFR path.** D3 honest-deferral currently raises `NotImplementedError` in `simulation_node` when `state['supplied']` is set. Two viable paths (encoded in the exception message):
@@ -189,34 +238,25 @@ Also run `python ../scripts/verify_schemas.py` -> expect **12/12 passed** (no sc
 
 ---
 
-## 7. Next iteration: Iteration 6 — Domestic Services (Problem C, slice 1)
+## 7. Next iteration: Iteration 10 — scope per `design-v1-iteration-plan.md §1 → ITERATION 10` (NOT read this session)
 
-**Goal (from `design-v1-iteration-plan.md §1`, ITERATION 6):** smallest possible domestic-mode end-to-end. Pick services first because it needs the fewest new components.
+> **Iterations 6, 6a, 7, 8, 9 are SHIPPED — see §5.** Iteration 9 bound `inventory_carrying.isr_observed` → FRED ISRATIO (and carried the Iter-8 SOFR hybrid bind into `us-ecommerce-live.json`). The broader "live Census/BLS bindings" originally sketched in this section did NOT ship — they were DEFERRED on evidence (no free PMI/DSO REST APIs; Census MRTS query shape unverifiable from sandbox; no Iter-9 BLS consumer). See the §5 Iteration 9 block (SCOPE DECISIONS) for the full reasoning. **Authoritative Iter-10 plan = `design-v1-iteration-plan.md §1 → ITERATION 10`; read it before starting. NOT read this session.**
 
-**Build:**
-- Two new components: `backend/components/demand_volatility.py`, `backend/components/payment_cycle.py`. (Reuse the existing `base_sofr.py` and `wc.py`.)
-- Author `config/risk-factor-profiles/domestic/us-services.json` and `_base_domestic.json`.
-- All component sources resolve to **snapshot files** under `backend/tests/fixtures/snapshots/` — no live API calls in this iteration (live FRED/Census/BLS bindings are Iter-8/9).
-- Extend N1 Intake to extract `business_identity.mode = "domestic_services"`.
-- Extend N2 Market-Context to resolve NAICS sector instead of GTAP code when mode is domestic.
-- Add `backend/tests/test_composer_derived_domestic.py`.
+**Deferred from Iter-9 (candidates for a later iteration; NOT yet scoped against plan §1 ITERATION 10):**
+- `demand_volatility.pmi_current` live bind — needs a reformulation onto a free signal (e.g. FRED ECOMPCTSA / Census E-commerce Retail); changes the component input + formula.
+- `payment_cycle.dso_observed` live bind — sources are free REPORTS (Atradius / Intuit / Fed SBCS / JPMC), not REST APIs; needs a report-ingest path, not an api client.
+- `census_client.py` / `bls_client.py` — build only when a consumer AND a verified query shape both exist.
+- `config/corridor-references/` folder still not on disk (§6 item 4).
+- The Iter-9 user sign-offs / smoke listed in the §5 Iteration 9 block: wc in/out conflict, `inventory_carrying` `max_age_days=45`, the `series_id="ISRATIO"` magnitude smoke, and the carried Iter-8 SOFR smoke + split/cache sign-offs.
 
-**Acceptance:**
-- Synthetic US SaaS loan → recommendation runs end-to-end.
-- Recommendation rationale (from N5) does **not** mention tariff, sovereign, or commodity.
-- Provenance report shows `source_type: "config_file"` for component snapshots (with `source_ref` pointing to the snapshot file path); the snapshot date appears in the snapshot file metadata.
-- Byte-equality and all previous tests green (224 + Iter-6 additions).
+**Pre-iteration check (standing lesson, Iter-4/5/6):**
+- **LIST `backend/tests/` BEFORE authoring new test files.** Files may be pre-staged; if present, read them and treat their expected values as canonical.
 
-**Pre-iteration check:**
-- **LIST `backend/tests/` BEFORE authoring new test files** (Iter-4 lesson, re-confirmed in Iter-5). Files may be pre-staged. If a test file is already on disk, read it and treat its expected values as canonical — they constrain the config files you'll write.
-- **Profile resolver mode handling.** `profile_resolver.py:_derive_business_identity` currently hardcodes `mode="export_import"`. Iter-6 needs N2 Market-Context to write a real `business_identity.mode` and the resolver to honor it. This is a real change to the Iter-2/3 resolver (not just additive).
-- **N6a derived branch is dispatch=draps_v1-shaped.** For domestic profiles, dispatch will be `v2_direct` (V2 computes SOFR itself per-component). N6a's `_stamp_derived_sofr_and_rates` currently reads `simulation_result.sofr_path` from DRAPS output; Iter-6 (or Iter-4's deferred v2_direct) needs an extended attribution model where each SOFR point traces to the specific component(s) that contributed bps to it. The current per-point-to-leaf-file attribution is a stopgap that works for draps_v1 only.
-
-**START HERE in the new chat:**
+**START HERE in a new chat:**
   1. Read PROJECT_CONTEXT.md at the project root.
-  2. Confirm 224/224 still green by running the full regression command in the §8 health-check.
-  3. Read `backend/profile_resolver.py` and `backend/deterministic_agents.py:simulation_node` in full — understand current mode handling and the dispatch=draps_v1 path.
-  4. Outline the Iter-6 work as a per-deliverable plan; stop for confirmation before authoring code.
+  2. Run the §8 health-check; confirm 265 PASSED + byte-equality 6/6 green + schema 17/17.
+  3. Read `design-v1-iteration-plan.md §1` (ITERATION 10) for authoritative scope.
+  4. Outline Iter-10 per-deliverable; stop for confirmation before authoring code.
 
 ---
 
@@ -227,9 +267,9 @@ From `backend/` with the venv active, three commands:
 ```
 python ../scripts/verify_schemas.py
 pytest tests/test_draps_client_extract.py tests/test_provenance_invariant.py -v
-pytest tests/test_api_supplied.py tests/test_byte_equality_v1.py tests/test_composer_derived.py tests/test_composer_supplied.py tests/test_draps_client_extract.py tests/test_no_silent_default.py tests/test_profile_resolver_layering.py tests/test_profile_resolver_supplied.py tests/test_profile_spec_validator.py tests/test_provenance_invariant.py tests/test_provenance_supplied.py tests/test_simulation_supplied.py -v
+pytest tests/test_api_supplied.py tests/test_byte_equality_v1.py tests/test_composer_derived.py tests/test_composer_derived_domestic.py tests/test_composer_supplied.py tests/test_draps_client_extract.py tests/test_honest_failure.py tests/test_no_silent_default.py tests/test_profile_resolver_layering.py tests/test_profile_resolver_supplied.py tests/test_profile_spec_validator.py tests/test_provenance_invariant.py tests/test_provenance_supplied.py tests/test_simulation_supplied.py tests/test_simulation_v2_direct.py -v
 ```
 
-Expect, in order: **12/12 schema rows OK**, **81 Iter-5 tests passed** (31 draps extract + 50 provenance invariant), **224 tests passed** with the byte-equality 6/6 lock green. If anything fails, **STOP** and investigate before starting new work — the byte-equality lock and all Iter-3+Iter-4+Iter-5 contracts are load-bearing.
+Expect, in order: **17/17 schema rows OK**, **81 Iter-5 tests passed** (31 draps extract + 50 provenance invariant), and the full regression **265 PASSED** (verified 2026-05-30, Windows-side, DRAPS+ACTUS up) with the byte-equality 6/6 lock green. New-tests-since-Iter-5 (verified per-file, none parametrised): +10 (6a `test_simulation_v2_direct`) +8 (Iter-6 section of `test_composer_derived_domestic`) +9 (Iter-7 section, same file) +9 (Iter-8 `test_honest_failure`) +5 (Iter-9 ISRATIO section of `test_honest_failure`) = +41. **The 2026-05-30 run confirms 224 + 41 = 265 with no regression:** `test_no_silent_default.py` kept its 7-count and its 2 rewritten 6a composer tests (`test_composer_default_dispatch_v2_direct_raises_not_silent_fallback`, `test_composer_explicit_v2_direct_raises_not_silent_fallback`) both pass, so the Iter-5 base of 224 is intact under the shipped `v2_direct` branch. If a future run shows anything failing, **STOP** and investigate before starting new work — the byte-equality lock and all Iter-3→Iter-8 contracts are load-bearing.
 
-`test_byte_equality_v1.py` requires DRAPS (port 4000) and ACTUS (ports 8082/8083) running per §4. The other 11 test files are pure Python — safe in any CI environment.
+`test_byte_equality_v1.py` requires DRAPS (port 4000) and ACTUS (ports 8082/8083) running per §4. The other 14 test files in the regression set are pure Python / monkeypatched — safe in any CI environment. This INCLUDES `test_honest_failure.py` (FRED HTTP monkeypatched) and `test_simulation_v2_direct.py` (ACTUS monkeypatched); note this insulates the TESTS, not production — a real api-mode resolution (`industry='services-live'`) still needs `FRED_API_KEY` from config.

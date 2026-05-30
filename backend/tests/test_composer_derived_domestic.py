@@ -271,9 +271,10 @@ def test_composer_audit_records_domestic_dispatch():
 # SCOPE NOTE — numeric vector NOT frozen here, for two reasons:
 #   (1) us-ecommerce.json inputs are flagged ILLUSTRATIVE (same rationale as the
 #       Iter-6 services SCOPE NOTE above — don't gate on placeholder values), and
-#   (2) the inventory_carrying closed form is PENDING USER SIGN-OFF
-#       (backend/components/inventory_carrying.py docstring). Freezing the 9-point
-#       vector is deferred until both are settled. The component unit tests below
+#   (2) the inventory_carrying v1 baseline closed form is now SIGNED OFF (user-
+#       confirmed); the fuller CCC form (DIO+DSO−DPO) remains deferred without an
+#       architecture change. Reason (2) is therefore resolved — only the illustrative
+#       inputs (1) keep the 9-point vector unfrozen. The component unit tests below
 #       instead lock the FORM (baseline floor, glut/stockout symmetry), which are
 #       robust design properties rather than placeholder magnitudes.
 
@@ -430,8 +431,9 @@ def test_inventory_carrying_glut_and_stockout_are_symmetric():
 def test_inventory_carrying_peak_matches_documented_formula():
     """At t == months_to_peak the trapezoid is at peak = baseline + dev*sens*dio (in fractions).
 
-    Locks the Iter-7 closed form (PENDING SIGN-OFF): if the formula combination changes
-    on sign-off, this expectation changes with it — intended.
+    Locks the Iter-7 closed form (v1 baseline SIGNED OFF, user-confirmed): if a future
+    move to the fuller CCC form (DIO+DSO−DPO) changes the combination, this expectation
+    changes with it — intended.
     """
     from components.inventory_carrying import inventory_carrying_dso_dpo
     inputs = {

@@ -54,6 +54,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from data_sources.api_binding import bind_api_sources
+
+
+def _fred_api_key() -> str:
+    """Read the FRED key from settings lazily.
+
+    Imported inside the function (not at module top) so this deterministic node
+    has no import-time dependency on a populated environment: offline/CI runs
+    that never bind an api-sourced component must not fail merely because
+    config import side-effects run. settings.fred_api_key defaults to '' when
+    unset; bind_api_sources turns a blank key into an honest FRED failure only
+    for profiles that actually declare source.type=='api'.
+    """
+    from config import settings
+    return getattr(settings, "fred_api_key", "") or ""
+
 
 _BACKEND_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _BACKEND_DIR.parent
@@ -429,6 +445,51 @@ def profile_resolver_node(state: dict) -> dict:
     resolution_path = [str(p.relative_to(_REPO_ROOT)) for p in candidates]
     profile_id = merged.get("profile_id", "unknown")
 
+    # Iter-8: live-data binding (Option A). After the layered merge, resolve any
+    # component whose source.type=='api' to a live value (FRED SOFR for the
+    # base_sofr 'initial' input) BEFORE the composer runs. On outage with no
+    # profile-authorised cache fallback, bind_api_sources returns errors; we
+    # surface them as validation_errors so the EXISTING post-N3c conditional
+    # edge routes to GIVE-UP. graph.py and composer.py wiring stay unchanged.
+    # Profiles with no api-sourced component (the Iter-1..7 config_file/snapshot
+    # profiles) pass through bind_api_sources untouched and never touch the
+    # network, so offline/CI runs are unaffected.
+    needs_key = any((c.get("source") or {}).get("type") == "api"
+                    for c in (merged.get("components") or []))
+    bound, bind_errors = bind_api_sources(merged, api_key=_fred_api_key() if needs_key else "")
+    if bind_errors:
+        return {
+            "business_identity": identity,
+            "risk_factor_profile_id": profile_id,
+            "resolved_risk_profile": None,
+            "profile_resolution_path": resolution_path,
+            "validation_errors": bind_errors,
+            "audit_log": [
+                _audit_entry(
+                    "profile_resolver",
+                    f"\u2717 api binding failed: {len(bind_errors)} error(s)",
+                    {
+                        "profile_id": profile_id,
+                        "resolution_path": resolution_path,
+                        "identity": identity,
+                        "errors": bind_errors,
+                    },
+                )
+            ],
+        }
+    merged = bound
+
+    # Surface the api binding outcome (if any) in the audit entry so the trace
+    # shows live-vs-stale provenance at the resolver boundary.
+    api_binding_summary = [
+        {
+            "component": c.get("name"),
+            "binding_result": (c.get("source") or {}).get("binding_result"),
+        }
+        for c in (merged.get("components") or [])
+        if (c.get("source") or {}).get("binding_result") is not None
+    ]
+
     return {
         "business_identity": identity,
         "risk_factor_profile_id": profile_id,
@@ -437,11 +498,13 @@ def profile_resolver_node(state: dict) -> dict:
         "audit_log": [
             _audit_entry(
                 "profile_resolver",
-                f"\u2713 merged profile {profile_id} from {len(candidates)} layer(s)",
+                f"\u2713 merged profile {profile_id} from {len(candidates)} layer(s)"
+                + (f"; api-bound {len(api_binding_summary)} component(s)" if api_binding_summary else ""),
                 {
                     "profile_id": profile_id,
                     "resolution_path": resolution_path,
                     "identity": identity,
+                    "api_bindings": api_binding_summary,
                 },
             )
         ],

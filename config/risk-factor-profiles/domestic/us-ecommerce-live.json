@@ -1,0 +1,134 @@
+{
+  "$schema": "../../../schemas/risk-factor-profile.schema.json",
+  "profile_id": "us-ecommerce-live-v1",
+  "version": "1.0.0",
+  "mode": "derived_domestic",
+  "dispatch": "v2_direct",
+  "applies_to": {
+    "mode": "domestic",
+    "industry": "ecommerce-live"
+  },
+  "_notes": {
+    "purpose": "Iter-9 LIVE-DATA variant of us-ecommerce.json. Identical in every respect EXCEPT two component sources bound at runtime (source.type='api'): base_sofr.initial <- FRED SOFR (same hybrid bind as us-services-live.json), and inventory_carrying.isr_observed <- FRED ISRATIO. demand_volatility, payment_cycle, and wc stay config_file/snapshot. SEPARATE profile (distinct applies_to.industry='ecommerce-live') rather than an in-place edit of us-ecommerce.json, for the same reason us-services-live is separate: the Iter-7 composer/regression tests resolve us-ecommerce.json through the real profile_resolver and must stay OFFLINE-deterministic. A treasurer wanting live data selects industry='ecommerce-live'; CI and offline runs keep industry='ecommerce'.",
+    "what_iter9_binds": "inventory_carrying is the ONLY Iter-9-bindable component beyond base_sofr. Verified against design-v1-risk-factor-catalog.md and design-v1-free-apis.md: (1) inventory_carrying.isr_observed has a clean free-API source (FRED ISRATIO, catalog b.2 lists it as the PRIMARY source); (2) demand_volatility.pmi_current has NO free API (ISM PMI is commercial; S&P/au Jibun PMI is release-day-free pages with no REST API; FRED carries no PMI series) -> stays snapshot; (3) payment_cycle.dso_observed sources (Atradius/Intuit/Fed SBCS/JPMC) are FREE REPORTS, not APIs -> stays snapshot; (4) wc_trapezoidal has no market-observable input slot (its inputs are output bps) -> not bindable, out of Iter-9. Census M3/MRTS corroboration for isr and a BLS client are DEFERRED: the Census MRTS query/field paths could not be verified from the build sandbox (api.census.gov unreachable; design docs give only the base URL), and no Iter-9 component consumes a BLS series (BLS PPI maps to wc/freight/input_cost, all out of scope).",
+    "isr_binding_hybrid": "Like base_sofr's hybrid bind, only inventory_carrying.isr_observed is overwritten live; isr_historic_mean, sensitivity_bps_per_ratio_point, dio_sensitivity, baseline_bps, and stress_timing remain profile-DECLARED. api_binding writes only inputs.isr_observed; the declared 1.62 below is the offline fallback + the seed for N3c's inputs_schema check, OVERWRITTEN by the live FRED value on a successful bind.",
+    "series_id_caveat_FOR_SMOKE": "design docs name 'FRED ISRATIO' and describe it as the Retailers' inventory-to-sales ratio (~1.45 historic). The FRED series literally id'd 'ISRATIO' is Total Business inv/sales (~1.35-1.40); the retailers'-specific series may differ. Bound to series_id='ISRATIO' per the docs verbatim; VERIFY the returned magnitude on the Windows-side smoke before trusting it, and switch series_id if the retailers'-specific series is intended. Not guessing a different id here.",
+    "cache_policy_choice_FOR_SIGNOFF": "base_sofr keeps mode='cached_within_days', max_age_days=4 (daily SOFR, identical to us-services-live). inventory_carrying uses max_age_days=45 because ISRATIO is MONTHLY and published ~6 weeks in arrears, so a 4-day window would reject every cached fallback. 45d tolerates one missed monthly release while still refusing genuinely stale data. PENDING USER SIGN-OFF (parallels the Iter-8 SOFR-window sign-off still owed).",
+    "offline_warning": "Resolving THIS profile triggers live FRED calls (SOFR + ISRATIO) inside profile_resolver. NOT safe for offline CI. The honest-failure test exercises the binding with the HTTP layer monkeypatched and never hits the network. Live smoke runs on the user's Windows host (api.stlouisfed.org is not in the sandbox allow-list).",
+    "snapshot_fixtures": "demand_volatility/payment_cycle/wc/inventory_carrying source.ref point at backend/tests/fixtures/snapshots/us-ecommerce-{pmi,dso,wc,isr}-2026q1.json, authored alongside this profile in Iter-9 (they did not exist before; only the 4 us-services-* fixtures were on disk). The isr fixture doubles as the offline DECLARED fallback for inventory_carrying."
+  },
+  "components": [
+    {
+      "name": "base_sofr",
+      "formula_id": "base_sofr_fed_path_linear",
+      "inputs": {
+        "initial": 0.0450,
+        "peak":    0.0550,
+        "final":   0.0475,
+        "months_to_peak": 12,
+        "total_months_assumption": 24
+      },
+      "source": {
+        "type": "api",
+        "provider": "FRED",
+        "series_id": "SOFR",
+        "binds": "initial",
+        "cache_policy": {
+          "mode": "cached_within_days",
+          "max_age_days": 4
+        },
+        "citation": "FRED series SOFR (Federal Reserve Bank of New York, retrieved from FRED), latest observation, bound to base_sofr.initial at runtime. peak/final remain the declared V1 anchor pending a Fed dot-plot source (later iteration). The declared inputs.initial=0.0450 is the offline DECLARED fallback and the seed for the inputs_schema check; it is OVERWRITTEN by the live FRED value when binding succeeds. Identical hybrid bind to us-services-live.json."
+      }
+    },
+    {
+      "name": "demand_volatility",
+      "formula_id": "demand_volatility_vix_proxy",
+      "inputs": {
+        "pmi_neutral":               50.0,
+        "pmi_current":               47.0,
+        "sensitivity_bps_per_point":  4.0,
+        "baseline_bps":               5.0,
+        "decay_months":               6
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-ecommerce-pmi-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "Identical to us-ecommerce.json. STAYS snapshot in Iter-9: pmi_current has no free API (ISM commercial; S&P/au Jibun release-day-free pages, no REST API; no FRED PMI series). A reformulation to a FRED ECOMPCTSA / Census E-commerce Retail signal is a separate later iteration (changes the component input + formula). Formula spec per design-v1-risk-factor-catalog.md b.1."
+      }
+    },
+    {
+      "name": "payment_cycle",
+      "formula_id": "payment_cycle_stress_dso",
+      "inputs": {
+        "dso_observed":             45.0,
+        "dso_median":               35.0,
+        "sensitivity_bps_per_day":   1.5,
+        "baseline_bps":              2.0,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-ecommerce-dso-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "Identical to us-ecommerce.json. STAYS snapshot in Iter-9: dso_observed sources (Atradius PPB, Intuit QuickBooks, Fed SBCS, JPMC Institute) are FREE REPORTS per design-v1-free-apis.md s6, not REST APIs. Formula spec per design-v1-risk-factor-catalog.md b.5."
+      }
+    },
+    {
+      "name": "wc",
+      "formula_id": "wc_trapezoidal",
+      "inputs": {
+        "initial": 0.0030,
+        "peak":    0.0060,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      },
+      "source": {
+        "type": "config_file",
+        "ref":  "tests/fixtures/snapshots/us-ecommerce-wc-2026q1.json",
+        "snapshot_date": "2026-01-31",
+        "citation": "Identical to us-ecommerce.json. STAYS snapshot in Iter-9: wc_trapezoidal's inputs (initial/peak bps) are output magnitudes, not a market observable, so there is no input to bind to a live series. A derivation from FRED ISRATIO into wc bps is out of Iter-9 scope (NOTE: us-services-live.json _notes and us-ecommerce.json wc citation both label this as Iter-9 work; that conflicts with the carried scoping decision to exclude wc, and is flagged for the user)."
+      }
+    },
+    {
+      "name": "inventory_carrying",
+      "formula_id": "inventory_carrying_dso_dpo",
+      "inputs": {
+        "isr_observed":                    1.62,
+        "isr_historic_mean":               1.45,
+        "sensitivity_bps_per_ratio_point": 200.0,
+        "dio_sensitivity":                 1.0,
+        "baseline_bps":                    3.0,
+        "stress_timing": {
+          "months_to_peak": 12,
+          "plateau_months":  3,
+          "descent_months":  9
+        }
+      },
+      "source": {
+        "type": "api",
+        "provider": "FRED",
+        "series_id": "ISRATIO",
+        "binds": "isr_observed",
+        "cache_policy": {
+          "mode": "cached_within_days",
+          "max_age_days": 45
+        },
+        "citation": "FRED series ISRATIO (Inventories-to-Sales Ratio, monthly; design-v1-risk-factor-catalog.md b.2 names it the PRIMARY source for inventory_carrying and the historic mean ~1.45). Latest observation bound to inventory_carrying.isr_observed AS-IS (value_scale=1.0 -- it is a ratio, not a percent rate). isr_historic_mean / sensitivity / dio_sensitivity / baseline_bps / stress_timing stay profile-declared. The declared inputs.isr_observed=1.62 is the offline DECLARED fallback and the inputs_schema seed; OVERWRITTEN by the live FRED value on a successful bind. Census M3/MRTS corroboration deferred (unverified query shape). See _notes.series_id_caveat_FOR_SMOKE and cache_policy_choice_FOR_SIGNOFF."
+      }
+    }
+  ],
+  "loan_spread_default": 0.025,
+  "tenor_grid": {
+    "kind": "quarterly",
+    "horizon_months": 24,
+    "anchor": "loan_start_date"
+  }
+}

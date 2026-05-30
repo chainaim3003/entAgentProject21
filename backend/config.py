@@ -48,6 +48,15 @@ class Settings(BaseSettings):
         description="ACTUS risk-engine base URL for the v2_direct direct eventsBatch POST",
     )
 
+    # OPTIONAL — FRED (Federal Reserve Economic Data) API key.
+    # Iter-8: live SOFR binding for profiles whose base_sofr component declares
+    # source.type=='api'. Defaulted to blank (NOT required) so offline/CI runs
+    # and the existing config_file/snapshot profiles (Iter-1..7) need no new env
+    # var. A blank key only fails runs that actually declare an api source — and
+    # then it fails HONESTLY (GIVE-UP), never silently. Register a free key at
+    # https://fred.stlouisfed.org.
+    fred_api_key: str = Field(default="", description="FRED API key for live SOFR binding (Iter-8)")
+
     # Persistence (defaults to local SQLite)
     checkpoint_db_url: str = Field(default="sqlite:///./checkpoints.db")
     memory_db_url: str = Field(default="sqlite:///./memory.db")
